@@ -258,6 +258,8 @@ pub struct ParticleBufferHandle {
     pub indices_buffer: Handle<ShaderStorageBuffer>,
     /// Buffer holding sorted/reordered particle data for rendering.
     pub sorted_particles_buffer: Handle<ShaderStorageBuffer>,
+    /// Buffer holding per-emitter uniforms (transform, flags) for the material shader.
+    pub emitter_uniforms_buffer: Handle<ShaderStorageBuffer>,
     /// Maximum number of particles this buffer can hold.
     pub max_particles: u32,
 }
@@ -271,13 +273,6 @@ pub struct ParticleGpuBuffers {
     pub uniform_buffer: Buffer,
     /// Maximum number of particles this buffer can hold.
     pub max_particles: u32,
-}
-
-/// Component linking a mesh entity back to its parent emitter entity.
-#[derive(Component)]
-pub struct EmitterMeshEntity {
-    /// The emitter entity this mesh belongs to.
-    pub emitter_entity: Entity,
 }
 
 /// Tracks the currently applied mesh configuration for change detection.

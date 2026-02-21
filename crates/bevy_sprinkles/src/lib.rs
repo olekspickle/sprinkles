@@ -185,9 +185,8 @@ use compute::ParticleComputePlugin;
 use extract::{extract_colliders, extract_particle_systems};
 use sort::ParticleSortPlugin;
 use spawning::{
-    cleanup_particle_entities, setup_particle_systems, sync_collider_data,
-    sync_emitter_mesh_transforms, sync_emitter_transform, sync_particle_material,
-    sync_particle_mesh, update_particle_time,
+    cleanup_particle_entities, setup_particle_systems, sync_collider_data, sync_emitter_transform,
+    sync_particle_material, sync_particle_mesh, update_particle_time, write_emitter_uniforms,
 };
 use textures::{
     CurveTextureCache, FallbackCurveTexture, FallbackGradientTexture, GradientTextureCache,
@@ -230,13 +229,14 @@ impl Plugin for SprinklesPlugin {
                 setup_particle_systems,
                 sync_particle_mesh,
                 sync_particle_material,
-                sync_emitter_mesh_transforms,
                 sync_emitter_transform,
                 sync_collider_data,
                 update_particle_time,
                 cleanup_particle_entities,
             ),
         );
+
+        app.add_systems(PostUpdate, write_emitter_uniforms);
 
         app.add_plugins((
             ParticleComputePlugin,
@@ -263,8 +263,8 @@ pub use asset::{
 };
 pub use material::ParticleMaterialExtension;
 pub use runtime::{
-    ColliderEntity, EmitterEntity, EmitterMeshEntity, EmitterRuntime, ParticleBufferHandle,
-    ParticleData, ParticleMaterial, ParticleMaterialHandle, ParticleSystem2D, ParticleSystem3D,
+    ColliderEntity, EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleData,
+    ParticleMaterial, ParticleMaterialHandle, ParticleSystem2D, ParticleSystem3D,
     ParticleSystemRuntime, ParticlesCollider3D,
 };
 #[cfg(feature = "preset-textures")]
