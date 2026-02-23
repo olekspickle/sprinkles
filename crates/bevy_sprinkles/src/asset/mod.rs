@@ -367,7 +367,7 @@ impl Default for EmitterDrawPass {
 }
 
 /// The axis a quad particle mesh faces by default.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Reflect)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, Reflect)]
 pub enum QuadOrientation {
     /// The quad faces along the X axis.
     FaceX,
@@ -450,6 +450,65 @@ fn default_prism_left_to_right() -> f32 {
 
 fn default_prism_size() -> Vec3 {
     Vec3::splat(1.0)
+}
+
+impl Eq for ParticleMesh {}
+
+impl std::hash::Hash for ParticleMesh {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        std::mem::discriminant(self).hash(hasher);
+        match self {
+            Self::Quad {
+                orientation,
+                size,
+                subdivide,
+            } => {
+                orientation.hash(hasher);
+                size.x.to_bits().hash(hasher);
+                size.y.to_bits().hash(hasher);
+                subdivide.x.to_bits().hash(hasher);
+                subdivide.y.to_bits().hash(hasher);
+            }
+            Self::Sphere { radius } => {
+                radius.to_bits().hash(hasher);
+            }
+            Self::Cuboid { half_size } => {
+                half_size.x.to_bits().hash(hasher);
+                half_size.y.to_bits().hash(hasher);
+                half_size.z.to_bits().hash(hasher);
+            }
+            Self::Cylinder {
+                top_radius,
+                bottom_radius,
+                height,
+                radial_segments,
+                rings,
+                cap_top,
+                cap_bottom,
+            } => {
+                top_radius.to_bits().hash(hasher);
+                bottom_radius.to_bits().hash(hasher);
+                height.to_bits().hash(hasher);
+                radial_segments.hash(hasher);
+                rings.hash(hasher);
+                cap_top.hash(hasher);
+                cap_bottom.hash(hasher);
+            }
+            Self::Prism {
+                left_to_right,
+                size,
+                subdivide,
+            } => {
+                left_to_right.to_bits().hash(hasher);
+                size.x.to_bits().hash(hasher);
+                size.y.to_bits().hash(hasher);
+                size.z.to_bits().hash(hasher);
+                subdivide.x.to_bits().hash(hasher);
+                subdivide.y.to_bits().hash(hasher);
+                subdivide.z.to_bits().hash(hasher);
+            }
+        }
+    }
 }
 
 impl Default for ParticleMesh {

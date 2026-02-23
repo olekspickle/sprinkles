@@ -5,7 +5,7 @@ use bevy::{
 use crate::{
     asset::{DrawPassMaterial, EmitterData, ParticleSystemAsset},
     material::{ParticleEmitterUniforms, ParticleMaterialExtension},
-    mesh::create_particle_mesh,
+    mesh::ParticleMeshCache,
     runtime::{
         ColliderEntity, CurrentMaterialConfig, CurrentMeshConfig, EmitterEntity, EmitterRuntime,
         ParticleBufferHandle, ParticleData, ParticleMaterial, ParticleMaterialHandle,
@@ -181,6 +181,7 @@ pub fn setup_particle_systems(
     assets: Res<Assets<ParticleSystemAsset>>,
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut mesh_cache: ResMut<ParticleMeshCache>,
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
     mut materials: ResMut<Assets<ParticleMaterial>>,
 ) {
@@ -227,7 +228,7 @@ pub fn setup_particle_systems(
             let current_material = emitter.draw_pass.material.clone();
             let shadow_caster = emitter.draw_pass.shadow_caster;
 
-            let particle_mesh_handle = create_particle_mesh(&current_mesh, amount, &mut meshes);
+            let particle_mesh_handle = mesh_cache.get_or_create(&current_mesh, amount, &mut meshes);
 
             let material_handle = materials.add(create_particle_material_from_config(
                 &current_material,
@@ -400,6 +401,7 @@ pub fn sync_particle_mesh(
     )>,
     assets: Res<Assets<ParticleSystemAsset>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut mesh_cache: ResMut<ParticleMeshCache>,
 ) {
     for (emitter, runtime, buffer_handle, mut current_config, mut mesh_handle, mut mesh3d) in
         emitter_query.iter_mut()
@@ -417,7 +419,7 @@ pub fn sync_particle_mesh(
 
         if current_config.0 != new_mesh {
             let new_mesh_handle =
-                create_particle_mesh(&new_mesh, buffer_handle.max_particles, &mut meshes);
+                mesh_cache.get_or_create(&new_mesh, buffer_handle.max_particles, &mut meshes);
             mesh3d.0 = new_mesh_handle.clone();
             current_config.0 = new_mesh;
             mesh_handle.0 = new_mesh_handle;

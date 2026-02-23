@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bevy::{
     asset::RenderAssetUsages,
     mesh::{Indices, MeshVertexAttributeId, PrimitiveTopology, VertexAttributeValues},
@@ -5,6 +7,26 @@ use bevy::{
 };
 
 use crate::asset::{ParticleMesh, QuadOrientation};
+
+/// Cache for instanced particle meshes, keyed by mesh configuration and particle count.
+#[derive(Resource, Default)]
+pub struct ParticleMeshCache {
+    cache: HashMap<(ParticleMesh, u32), Handle<Mesh>>,
+}
+
+impl ParticleMeshCache {
+    pub fn get_or_create(
+        &mut self,
+        config: &ParticleMesh,
+        particle_count: u32,
+        meshes: &mut Assets<Mesh>,
+    ) -> Handle<Mesh> {
+        self.cache
+            .entry((config.clone(), particle_count))
+            .or_insert_with(|| build_particle_mesh(config, particle_count, meshes))
+            .clone()
+    }
+}
 
 fn create_cylinder_mesh(
     top_radius: f32,
@@ -453,7 +475,7 @@ fn create_base_mesh(config: &ParticleMesh) -> Mesh {
     }
 }
 
-pub(crate) fn create_particle_mesh(
+fn build_particle_mesh(
     config: &ParticleMesh,
     particle_count: u32,
     meshes: &mut Assets<Mesh>,
