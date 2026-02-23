@@ -15,6 +15,7 @@ use crate::{
 };
 
 const MAX_FRAME_DELTA: f32 = 0.1;
+const INACTIVE_GRACE_FACTOR: f32 = 1.2;
 
 fn get_particle_asset<'a>(
     parent_system: Entity,
@@ -59,7 +60,7 @@ pub fn update_particle_time(
         let clear_requested = runtime.clear_requested;
         runtime.clear_requested = false;
 
-        if system_runtime.paused {
+        if runtime.inactive || system_runtime.paused {
             if clear_requested {
                 let step = SimulationStep {
                     prev_system_time: runtime.system_time,
@@ -133,8 +134,18 @@ pub fn update_particle_time(
         }
 
         if emitter_data.time.one_shot && runtime.cycle > 0 && !runtime.one_shot_completed {
-            runtime.emitting = false;
+            runtime.set_emitting(false);
             runtime.one_shot_completed = true;
+        }
+
+        if !runtime.emitting {
+            runtime.inactive_time += time.delta_secs();
+            let grace = emitter_data.time.lifetime * INACTIVE_GRACE_FACTOR;
+            if runtime.inactive_time > grace {
+                runtime.inactive = true;
+            }
+        } else {
+            runtime.inactive_time = 0.0;
         }
     }
 }
