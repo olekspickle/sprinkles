@@ -398,6 +398,12 @@ pub enum ParticleMesh {
         /// Radius of the sphere. Defaults to `1.0`.
         #[serde(default = "default_sphere_radius")]
         radius: f32,
+        /// Number of longitudinal segments around the sphere. Defaults to `32`.
+        #[serde(default = "default_sphere_segments")]
+        segments: u32,
+        /// Number of latitudinal rings on the sphere. Defaults to `16`.
+        #[serde(default = "default_sphere_rings")]
+        rings: u32,
     },
     /// An axis-aligned box mesh.
     Cuboid {
@@ -444,6 +450,14 @@ fn default_sphere_radius() -> f32 {
     1.0
 }
 
+fn default_sphere_segments() -> u32 {
+    32
+}
+
+fn default_sphere_rings() -> u32 {
+    16
+}
+
 fn default_prism_left_to_right() -> f32 {
     0.5
 }
@@ -469,8 +483,14 @@ impl std::hash::Hash for ParticleMesh {
                 subdivide.x.to_bits().hash(hasher);
                 subdivide.y.to_bits().hash(hasher);
             }
-            Self::Sphere { radius } => {
+            Self::Sphere {
+                radius,
+                segments,
+                rings,
+            } => {
                 radius.to_bits().hash(hasher);
+                segments.hash(hasher);
+                rings.hash(hasher);
             }
             Self::Cuboid { half_size } => {
                 half_size.x.to_bits().hash(hasher);
@@ -513,7 +533,11 @@ impl std::hash::Hash for ParticleMesh {
 
 impl Default for ParticleMesh {
     fn default() -> Self {
-        Self::Sphere { radius: 1.0 }
+        Self::Sphere {
+            radius: 1.0,
+            segments: 32,
+            rings: 18,
+        }
     }
 }
 

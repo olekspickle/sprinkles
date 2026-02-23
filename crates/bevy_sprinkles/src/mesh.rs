@@ -444,7 +444,11 @@ fn create_base_mesh(config: &ParticleMesh) -> Mesh {
 
             mesh
         }
-        ParticleMesh::Sphere { radius } => Mesh::from(Sphere::new(*radius)),
+        ParticleMesh::Sphere {
+            radius,
+            segments,
+            rings,
+        } => Sphere::new(*radius).mesh().uv(*segments, *rings).into(),
         ParticleMesh::Cuboid { half_size } => Mesh::from(Cuboid::new(
             half_size.x * 2.0,
             half_size.y * 2.0,
