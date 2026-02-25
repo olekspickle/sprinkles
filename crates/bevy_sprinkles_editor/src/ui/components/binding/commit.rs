@@ -23,6 +23,7 @@ use super::{
 
 #[derive(SystemParam)]
 pub(super) struct CommitContext<'w, 's> {
+    commands: Commands<'w, 's>,
     editor_state: Res<'w, EditorState>,
     assets: ResMut<'w, Assets<ParticleSystemAsset>>,
     editor_data: ResMut<'w, EditorData>,
@@ -44,24 +45,23 @@ impl CommitContext<'_, '_> {
     fn resolve_data_mut(
         &mut self,
         binding: &FieldBinding,
-    ) -> Option<(&mut dyn Reflect, BindingTarget, Option<u32>)> {
-        let target = binding.target;
+    ) -> Option<(&mut dyn Reflect, Option<u32>)> {
         let data = resolve_binding_data_mut(
             binding,
             &self.editor_state,
             &mut self.assets,
             &mut self.editor_data,
         )?;
-        let fixed_seed = if target == BindingTarget::Inspected {
+        let fixed_seed = if binding.target == BindingTarget::Inspected {
             read_fixed_seed(&*data)
         } else {
             None
         };
-        Some((data, target, fixed_seed))
+        Some((data, fixed_seed))
     }
 
-    fn mark_change(&mut self, target: BindingTarget, fixed_seed: Option<u32>) {
-        match target {
+    fn mark_change(&mut self, binding: &FieldBinding, fixed_seed: Option<u32>) {
+        match binding.target {
             BindingTarget::Asset => {
                 self.dirty_state.has_unsaved_changes = true;
             }
@@ -74,6 +74,9 @@ impl CommitContext<'_, '_> {
                     &mut self.emitter_runtimes,
                     fixed_seed,
                 );
+                if requires_respawn_binding(binding) {
+                    self.commands.trigger(RespawnEmittersEvent);
+                }
             }
         }
     }
@@ -82,38 +85,34 @@ impl CommitContext<'_, '_> {
         let Some(binding) = self.resolve_binding(entity) else {
             return;
         };
-        let Some((data, target, fixed_seed)) = self.resolve_data_mut(&binding) else {
+        let Some((data, fixed_seed)) = self.resolve_data_mut(&binding) else {
             return;
         };
         let changed = binding.write_reflected(data, apply_fn);
         if changed {
-            self.mark_change(target, fixed_seed);
+            self.mark_change(&binding, fixed_seed);
         }
     }
 
-    fn commit_field_value(&mut self, entity: Entity, value: FieldValue) -> bool {
+    fn commit_field_value(&mut self, entity: Entity, value: FieldValue) {
         let Some(binding) = self.resolve_binding(entity) else {
-            return false;
+            return;
         };
-        let should_respawn = if binding.target == BindingTarget::Inspected {
-            requires_respawn_binding(&binding)
-        } else {
-            false
-        };
-        let Some((data, target, fixed_seed)) = self.resolve_data_mut(&binding) else {
-            return false;
+        let Some((data, fixed_seed)) = self.resolve_data_mut(&binding) else {
+            return;
         };
         let changed = binding.write_value(data, &value);
         if changed {
-            self.mark_change(target, fixed_seed);
+            self.mark_change(&binding, fixed_seed);
         }
-        changed && should_respawn
     }
 }
 
 const RESPAWN_FIELD_PATHS: &[&str] = &[
     "enabled",
     "draw_pass.material.unlit",
+    "draw_pass.material.alpha_mode",
+    "draw_pass.transform_align",
     "draw_pass.shadow_caster",
     "emission.particles_amount",
 ];
@@ -134,11 +133,7 @@ fn requires_respawn_binding(binding: &FieldBinding) -> bool {
     false
 }
 
-pub(super) fn handle_text_commit(
-    trigger: On<TextEditCommitEvent>,
-    mut commands: Commands,
-    mut ctx: CommitContext,
-) {
+pub(super) fn handle_text_commit(trigger: On<TextEditCommitEvent>, mut ctx: CommitContext) {
     let Some(binding) = ctx.resolve_binding(trigger.entity) else {
         return;
     };
@@ -156,7 +151,7 @@ pub(super) fn handle_text_commit(
                 return;
             };
 
-            let Some((data, target, fixed_seed)) = ctx.resolve_data_mut(&binding) else {
+            let Some((data, fixed_seed)) = ctx.resolve_data_mut(&binding) else {
                 return;
             };
 
@@ -164,10 +159,7 @@ pub(super) fn handle_text_commit(
             let new_value = set_field_value_component(&current_value, idx, v);
             let changed = binding.write_value(data, &new_value);
             if changed {
-                ctx.mark_change(target, fixed_seed);
-                if target == BindingTarget::Inspected && requires_respawn_binding(&binding) {
-                    commands.trigger(RespawnEmittersEvent);
-                }
+                ctx.mark_change(&binding, fixed_seed);
             }
             return;
         }
@@ -178,20 +170,11 @@ pub(super) fn handle_text_commit(
         return;
     }
 
-    if ctx.commit_field_value(trigger.entity, value) {
-        commands.trigger(RespawnEmittersEvent);
-    }
+    ctx.commit_field_value(trigger.entity, value);
 }
 
-pub(super) fn handle_checkbox_commit(
-    trigger: On<CheckboxCommitEvent>,
-    mut commands: Commands,
-    mut ctx: CommitContext,
-) {
-    let value = FieldValue::Bool(trigger.checked);
-    if ctx.commit_field_value(trigger.entity, value) {
-        commands.trigger(RespawnEmittersEvent);
-    }
+pub(super) fn handle_checkbox_commit(trigger: On<CheckboxCommitEvent>, mut ctx: CommitContext) {
+    ctx.commit_field_value(trigger.entity, FieldValue::Bool(trigger.checked));
 }
 
 pub(super) fn handle_combobox_change(
@@ -237,7 +220,7 @@ pub(super) fn handle_combobox_change(
     };
 
     if changed {
-        mark_dirty_and_restart(&mut ctx.dirty_state, &mut ctx.emitter_runtimes, fixed_seed);
+        ctx.mark_change(&binding, fixed_seed);
     }
 }
 
@@ -310,7 +293,7 @@ pub(super) fn handle_variant_change(
     if binding.write_reflected(data, |field| {
         field.apply(default_value.as_ref());
     }) {
-        mark_dirty_and_restart(&mut ctx.dirty_state, &mut ctx.emitter_runtimes, fixed_seed);
+        ctx.mark_change(binding, fixed_seed);
     }
 }
 
