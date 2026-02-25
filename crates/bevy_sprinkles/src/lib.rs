@@ -81,7 +81,7 @@
 //!         }],
 //!         vec![],
 //!         false,
-//!         None,
+//!         Default::default(),
 //!     ));
 //!
 //!     commands.spawn(ParticleSystem3D { handle });

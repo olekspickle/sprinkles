@@ -1119,13 +1119,21 @@ impl Default for ColliderData {
 }
 
 /// Attribution information for a particle system.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Reflect)]
 pub struct ParticleSystemAuthors {
     /// The original creator this effect was inspired by.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub inspired_by: Option<String>,
+    #[serde(default, skip_serializing_if = "is_empty_string")]
+    pub inspired_by: String,
     /// The person who submitted or ported this effect.
+    #[serde(default, skip_serializing_if = "is_empty_string")]
     pub submitted_by: String,
+}
+
+impl ParticleSystemAuthors {
+    /// Returns `true` if both fields are empty
+    pub fn is_empty(&self) -> bool {
+        self.inspired_by.is_empty() && self.submitted_by.is_empty()
+    }
 }
 
 /// A complete particle system asset, loadable from RON files.
@@ -1133,7 +1141,7 @@ pub struct ParticleSystemAuthors {
 /// Contains one or more emitters and optional colliders that together define a
 /// particle effect. Load this asset and reference it from a [`ParticleSystem3D`](crate::ParticleSystem3D)
 /// or [`ParticleSystem2D`](crate::ParticleSystem2D) component to render the effect.
-#[derive(Asset, TypePath, Debug, Clone, Serialize, Deserialize)]
+#[derive(Asset, Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct ParticleSystemAsset {
     sprinkles_version: String,
     /// Display name for this particle system.
@@ -1150,9 +1158,9 @@ pub struct ParticleSystemAsset {
     /// Defaults to `false`.
     #[serde(default, skip_serializing_if = "is_false")]
     pub despawn_on_finish: bool,
-    /// Optional attribution information.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub authors: Option<ParticleSystemAuthors>,
+    /// Attribution information.
+    #[serde(default, skip_serializing_if = "ParticleSystemAuthors::is_empty")]
+    pub authors: ParticleSystemAuthors,
 }
 
 impl ParticleSystemAsset {
@@ -1163,7 +1171,7 @@ impl ParticleSystemAsset {
         emitters: Vec<EmitterData>,
         colliders: Vec<ColliderData>,
         despawn_on_finish: bool,
-        authors: Option<ParticleSystemAuthors>,
+        authors: ParticleSystemAuthors,
     ) -> Self {
         Self {
             sprinkles_version: current_format_version().to_string(),

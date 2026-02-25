@@ -43,7 +43,7 @@ struct ExampleEntry {
     path: String,
     dimension: ParticleSystemDimension,
     thumbnail: String,
-    authors: Option<ParticleSystemAuthors>,
+    authors: ParticleSystemAuthors,
 }
 
 #[derive(Resource)]
@@ -259,10 +259,14 @@ fn spawn_example_card(
 
     commands.entity(card).add_child(name_row);
 
-    if let Some(authors) = &entry.authors {
-        let label = match &authors.inspired_by {
-            Some(inspired) => format!("Original by: {inspired} · Author: {}", authors.submitted_by),
-            None => format!("Author: {}", authors.submitted_by),
+    if !entry.authors.submitted_by.is_empty() {
+        let label = if entry.authors.inspired_by.is_empty() {
+            format!("Author: {}", entry.authors.submitted_by)
+        } else {
+            format!(
+                "Original by: {} · Author: {}",
+                entry.authors.inspired_by, entry.authors.submitted_by
+            )
         };
 
         commands.entity(card).with_child((

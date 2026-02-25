@@ -116,6 +116,46 @@ pub(super) fn get_inspected_data_mut<'a>(
     }
 }
 
+pub(super) fn get_asset_data<'a>(
+    editor_state: &EditorState,
+    assets: &'a Assets<ParticleSystemAsset>,
+) -> Option<&'a dyn Reflect> {
+    let handle = editor_state.current_project.as_ref()?;
+    let asset = assets.get(handle)?;
+    Some(asset)
+}
+
+pub(super) fn get_asset_data_mut<'a>(
+    editor_state: &EditorState,
+    assets: &'a mut Assets<ParticleSystemAsset>,
+) -> Option<&'a mut dyn Reflect> {
+    let handle = editor_state.current_project.as_ref()?;
+    let asset = assets.get_mut(handle)?;
+    Some(asset)
+}
+
+pub(super) fn resolve_binding_data<'a>(
+    binding: &FieldBinding,
+    editor_state: &EditorState,
+    assets: &'a Assets<ParticleSystemAsset>,
+) -> Option<&'a dyn Reflect> {
+    match binding.target {
+        BindingTarget::Inspected => get_inspected_data(editor_state, assets),
+        BindingTarget::Asset => get_asset_data(editor_state, assets),
+    }
+}
+
+pub(super) fn resolve_binding_data_mut<'a>(
+    binding: &FieldBinding,
+    editor_state: &EditorState,
+    assets: &'a mut Assets<ParticleSystemAsset>,
+) -> Option<&'a mut dyn Reflect> {
+    match binding.target {
+        BindingTarget::Inspected => get_inspected_data_mut(editor_state, assets),
+        BindingTarget::Asset => get_asset_data_mut(editor_state, assets),
+    }
+}
+
 pub(super) fn find_ancestor<F>(
     mut entity: Entity,
     parents: &Query<&ChildOf>,
@@ -197,6 +237,13 @@ fn propagate_bindings(
     }
 }
 
+#[derive(Clone, Default, PartialEq, Eq)]
+pub enum BindingTarget {
+    #[default]
+    Inspected,
+    Asset,
+}
+
 #[derive(Clone)]
 pub enum FieldAccessor {
     Direct(String),
@@ -208,6 +255,7 @@ pub struct FieldBinding {
     pub accessor: FieldAccessor,
     pub kind: FieldKind,
     pub variant_edit: Option<Entity>,
+    pub target: BindingTarget,
 }
 
 impl FieldBinding {
@@ -216,6 +264,16 @@ impl FieldBinding {
             accessor: FieldAccessor::Direct(path.into()),
             kind,
             variant_edit: None,
+            target: BindingTarget::Inspected,
+        }
+    }
+
+    pub fn asset(path: impl Into<String>, kind: FieldKind) -> Self {
+        Self {
+            accessor: FieldAccessor::Direct(path.into()),
+            kind,
+            variant_edit: None,
+            target: BindingTarget::Asset,
         }
     }
 
@@ -232,6 +290,7 @@ impl FieldBinding {
             },
             kind,
             variant_edit: Some(variant_edit),
+            target: BindingTarget::Inspected,
         }
     }
 
@@ -247,6 +306,7 @@ impl FieldBinding {
             },
             kind,
             variant_edit: None,
+            target: BindingTarget::Inspected,
         }
     }
 
@@ -372,6 +432,7 @@ pub(super) enum FieldValue {
     U32(u32),
     OptionalU32(Option<u32>),
     Bool(bool),
+    String(String),
     Vec2(Vec2),
     Vec3(Vec3),
     Range(f32, f32),
@@ -398,6 +459,7 @@ impl FieldValue {
                 (Some(0), FieldKind::OptionalU32) => None,
                 (Some(v), _) => Some(v.to_string()),
             },
+            FieldValue::String(s) => Some(s.clone()),
             _ => None,
         }
     }
@@ -469,6 +531,7 @@ pub(super) fn parse_field_value(text: &str, kind: &FieldKind) -> FieldValue {
                 .map(FieldValue::OptionalU32)
                 .unwrap_or(FieldValue::None)
         }
+        FieldKind::String => FieldValue::String(text.to_string()),
         _ => FieldValue::None,
     }
 }
@@ -502,6 +565,9 @@ fn reflect_to_field_value(value: &dyn PartialReflect, kind: &FieldKind) -> Field
     }
     if let Some(v) = value.try_downcast_ref::<bool>() {
         return FieldValue::Bool(*v);
+    }
+    if let Some(v) = value.try_downcast_ref::<String>() {
+        return FieldValue::String(v.clone());
     }
     if let Some(v) = value.try_downcast_ref::<Vec2>() {
         return FieldValue::Vec2(*v);
@@ -552,6 +618,7 @@ fn apply_field_value_to_reflect(target: &mut dyn PartialReflect, value: &FieldVa
         FieldValue::U32(v) => apply_with_change_check(target, v),
         FieldValue::OptionalU32(v) => apply_with_change_check(target, v),
         FieldValue::Bool(v) => apply_with_change_check(target, v),
+        FieldValue::String(v) => apply_with_change_check(target, v),
         FieldValue::Vec2(v) => apply_with_change_check(target, v),
         FieldValue::Vec3(v) => apply_with_change_check(target, v),
         FieldValue::Range(min, max) => apply_with_change_check(

@@ -257,7 +257,7 @@
         ),
     ],
     colliders: [],
-    authors: Some((
+    authors: (
         submitted_by: "olekspickle",
-    )),
+    ),
 )

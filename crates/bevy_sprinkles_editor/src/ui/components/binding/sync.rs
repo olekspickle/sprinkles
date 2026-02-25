@@ -16,8 +16,8 @@ use crate::ui::widgets::text_edit::{EditorTextEdit, set_text_input_value};
 use crate::ui::widgets::variant_edit::{EditorVariantEdit, VariantDefinition, VariantEditConfig};
 
 use super::{
-    BoundTo, FieldBinding, FieldValue, InspectedEmitterTracker, format_f32, get_inspected_data,
-    get_variant_index_by_reflection,
+    BoundTo, FieldBinding, FieldValue, InspectedEmitterTracker, format_f32,
+    get_variant_index_by_reflection, resolve_binding_data,
 };
 
 pub(super) fn bind_text_inputs(
@@ -33,12 +33,12 @@ pub(super) fn bind_text_inputs(
         return;
     }
 
-    let Some(data) = get_inspected_data(&editor_state, &assets) else {
-        return;
-    };
-
     for (bound, mut queue) in &mut text_edits {
         let Ok(binding) = bindings.get(bound.binding) else {
+            continue;
+        };
+
+        let Some(data) = resolve_binding_data(binding, &editor_state, &assets) else {
             continue;
         };
 
@@ -87,11 +87,10 @@ pub(super) fn bind_widget_values(
         return;
     }
 
-    let Some(data) = get_inspected_data(&editor_state, &assets) else {
-        return;
-    };
-
     for (binding, mut state) in &mut checkbox_states {
+        let Some(data) = resolve_binding_data(binding, &editor_state, &assets) else {
+            continue;
+        };
         let value = binding.read_value(data);
         if let Some(checked) = value.to_bool() {
             state.checked = checked;
@@ -102,6 +101,9 @@ pub(super) fn bind_widget_values(
         if binding.kind != FieldKind::Curve {
             continue;
         }
+        let Some(data) = resolve_binding_data(binding, &editor_state, &assets) else {
+            continue;
+        };
         let Some(reflected) = binding.read_reflected(data) else {
             continue;
         };
@@ -118,6 +120,9 @@ pub(super) fn bind_widget_values(
         if binding.kind != FieldKind::Gradient {
             continue;
         }
+        let Some(data) = resolve_binding_data(binding, &editor_state, &assets) else {
+            continue;
+        };
         let Some(reflected) = binding.read_reflected(data) else {
             continue;
         };
@@ -130,6 +135,9 @@ pub(super) fn bind_widget_values(
         if !matches!(binding.kind, FieldKind::ComboBox { .. }) {
             continue;
         }
+        let Some(data) = resolve_binding_data(binding, &editor_state, &assets) else {
+            continue;
+        };
         let value = binding.read_value(data);
         if let FieldValue::U32(index) = value {
             config.selected = index as usize;
@@ -143,6 +151,9 @@ pub(super) fn bind_widget_values(
         if !matches!(binding.kind, FieldKind::ComboBox { .. }) {
             continue;
         }
+        let Some(data) = resolve_binding_data(binding, &editor_state, &assets) else {
+            continue;
+        };
         let value = binding.read_value(data);
         if let FieldValue::U32(index) = value {
             config.selected = index as usize;
@@ -150,6 +161,9 @@ pub(super) fn bind_widget_values(
     }
 
     for (binding, mut config) in &mut variant_edits {
+        let Some(data) = resolve_binding_data(binding, &editor_state, &assets) else {
+            continue;
+        };
         let new_index = if binding.is_variant() {
             let Some(reflected) = binding.read_reflected(data) else {
                 continue;
@@ -176,10 +190,6 @@ pub(super) fn bind_color_pickers(
     >,
     trigger_swatches: Query<&TriggerSwatchMaterial>,
 ) {
-    let Some(data) = get_inspected_data(&editor_state, &assets) else {
-        return;
-    };
-
     for (entity, mut state, binding) in &mut color_pickers {
         if !matches!(binding.kind, FieldKind::Color) {
             continue;
@@ -189,6 +199,10 @@ pub(super) fn bind_color_pickers(
         if !trigger_ready {
             continue;
         }
+
+        let Some(data) = resolve_binding_data(binding, &editor_state, &assets) else {
+            continue;
+        };
 
         let value = binding.read_value(data);
         let Some(color) = value.to_color() else {

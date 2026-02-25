@@ -199,10 +199,10 @@
             particle_flags: "",
         ),
     ],
-    authors: Some((
-        inspired_by: Some("Brackeys"),
+    authors: (
+        inspired_by: "Brackeys",
         submitted_by: "DoceAzedo",
-    )),
+    ),
     colliders: [
         (
             name: "Collider",

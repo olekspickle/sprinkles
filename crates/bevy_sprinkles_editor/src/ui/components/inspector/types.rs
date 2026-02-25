@@ -25,6 +25,7 @@ pub enum FieldKind {
     U32OrEmpty,
     OptionalU32,
     Bool,
+    String,
     Vector(VectorSuffixes),
     ComboBox {
         options: Vec<ComboBoxOption>,

@@ -16,8 +16,8 @@ use crate::ui::widgets::variant_edit::{VariantComboBox, VariantEditConfig};
 use crate::viewport::RespawnEmittersEvent;
 
 use super::{
-    BoundTo, FieldBinding, FieldValue, get_inspected_data_mut, mark_dirty_and_restart,
-    parse_field_value, read_fixed_seed,
+    BindingTarget, BoundTo, FieldBinding, FieldValue, get_inspected_data_mut,
+    mark_dirty_and_restart, parse_field_value, read_fixed_seed, resolve_binding_data_mut,
 };
 
 #[derive(SystemParam)]
@@ -39,15 +39,10 @@ impl CommitContext<'_, '_> {
         self.bindings.get(bound.binding).ok().cloned()
     }
 
-    fn commit_reflected(&mut self, entity: Entity, apply_fn: impl FnOnce(&mut dyn PartialReflect)) {
-        let Some(binding) = self.resolve_binding(entity) else {
-            return;
-        };
-        let Some(data) = get_inspected_data_mut(&self.editor_state, &mut self.assets) else {
-            return;
-        };
-        let fixed_seed = read_fixed_seed(&*data);
-        if binding.write_reflected(data, apply_fn) {
+    fn mark_change(&mut self, is_asset: bool, fixed_seed: Option<u32>) {
+        if is_asset {
+            self.dirty_state.has_unsaved_changes = true;
+        } else {
             mark_dirty_and_restart(
                 &mut self.dirty_state,
                 &mut self.emitter_runtimes,
@@ -56,24 +51,50 @@ impl CommitContext<'_, '_> {
         }
     }
 
+    fn commit_reflected(&mut self, entity: Entity, apply_fn: impl FnOnce(&mut dyn PartialReflect)) {
+        let Some(binding) = self.resolve_binding(entity) else {
+            return;
+        };
+        let is_asset = binding.target == BindingTarget::Asset;
+        let Some(data) = resolve_binding_data_mut(&binding, &self.editor_state, &mut self.assets)
+        else {
+            return;
+        };
+        let fixed_seed = if is_asset {
+            None
+        } else {
+            read_fixed_seed(&*data)
+        };
+        let changed = binding.write_reflected(data, apply_fn);
+        if changed {
+            self.mark_change(is_asset, fixed_seed);
+        }
+    }
+
     fn commit_field_value(&mut self, entity: Entity, value: FieldValue) -> bool {
         let Some(binding) = self.resolve_binding(entity) else {
             return false;
         };
-        let should_respawn = requires_respawn_binding(&binding);
-        let Some(data) = get_inspected_data_mut(&self.editor_state, &mut self.assets) else {
+        let is_asset = binding.target == BindingTarget::Asset;
+        let should_respawn = if is_asset {
+            false
+        } else {
+            requires_respawn_binding(&binding)
+        };
+        let Some(data) = resolve_binding_data_mut(&binding, &self.editor_state, &mut self.assets)
+        else {
             return false;
         };
-        let fixed_seed = read_fixed_seed(&*data);
-        if binding.write_value(data, &value) {
-            mark_dirty_and_restart(
-                &mut self.dirty_state,
-                &mut self.emitter_runtimes,
-                fixed_seed,
-            );
-            return should_respawn;
+        let fixed_seed = if is_asset {
+            None
+        } else {
+            read_fixed_seed(&*data)
+        };
+        let changed = binding.write_value(data, &value);
+        if changed {
+            self.mark_change(is_asset, fixed_seed);
         }
-        false
+        changed && should_respawn
     }
 }
 
@@ -115,23 +136,30 @@ pub(super) fn handle_text_commit(
         .ok()
         .and_then(|b| b.component_index);
 
-    let Some(data) = get_inspected_data_mut(&ctx.editor_state, &mut ctx.assets) else {
-        return;
-    };
-
+    // vector component edits require special read-modify-write handling
     if let Some(idx) = component_index {
         if let FieldKind::Vector(_) = &binding.kind {
             let Ok(v) = trigger.text.trim().parse::<f32>() else {
                 return;
             };
 
+            let is_asset = binding.target == BindingTarget::Asset;
+            let Some(data) = resolve_binding_data_mut(&binding, &ctx.editor_state, &mut ctx.assets)
+            else {
+                return;
+            };
+
             let current_value = binding.read_value(&*data);
             let new_value = set_field_value_component(&current_value, idx, v);
-            let fixed_seed = read_fixed_seed(&*data);
-
-            if binding.write_value(data, &new_value) {
-                mark_dirty_and_restart(&mut ctx.dirty_state, &mut ctx.emitter_runtimes, fixed_seed);
-                if requires_respawn_binding(&binding) {
+            let fixed_seed = if is_asset {
+                None
+            } else {
+                read_fixed_seed(&*data)
+            };
+            let changed = binding.write_value(data, &new_value);
+            if changed {
+                ctx.mark_change(is_asset, fixed_seed);
+                if !is_asset && requires_respawn_binding(&binding) {
                     commands.trigger(RespawnEmittersEvent);
                 }
             }
@@ -144,12 +172,8 @@ pub(super) fn handle_text_commit(
         return;
     }
 
-    let fixed_seed = read_fixed_seed(&*data);
-    if binding.write_value(data, &value) {
-        mark_dirty_and_restart(&mut ctx.dirty_state, &mut ctx.emitter_runtimes, fixed_seed);
-        if requires_respawn_binding(&binding) {
-            commands.trigger(RespawnEmittersEvent);
-        }
+    if ctx.commit_field_value(trigger.entity, value) {
+        commands.trigger(RespawnEmittersEvent);
     }
 }
 

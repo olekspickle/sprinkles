@@ -3,7 +3,7 @@ use bevy::prelude::*;
 
 use crate::state::{ActiveSidebarTab, SidebarTab};
 use crate::ui::tokens::{
-    BACKGROUND_COLOR, BORDER_COLOR, CORNER_RADIUS, FONT_PATH, PRIMARY_COLOR, TEXT_BODY_COLOR,
+    BACKGROUND_COLOR, BORDER_COLOR, CORNER_RADIUS_LG, FONT_PATH, PRIMARY_COLOR, TEXT_BODY_COLOR,
     TEXT_SIZE_SM,
 };
 use crate::ui::widgets::separator::EditorSeparator;
@@ -75,7 +75,7 @@ fn sidebar_button(parent: &mut ChildSpawnerCommands, tab: SidebarTab, asset_serv
                     height: px(28),
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
-                    border_radius: BorderRadius::all(CORNER_RADIUS),
+                    border_radius: BorderRadius::all(CORNER_RADIUS_LG),
                     ..default()
                 },
                 BackgroundColor(Color::NONE),

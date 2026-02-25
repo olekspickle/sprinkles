@@ -6,6 +6,7 @@ mod colors;
 mod draw_pass;
 mod emission;
 mod particle_flags;
+mod project_properties;
 mod scale;
 mod sub_emitter;
 mod time;
@@ -54,6 +55,7 @@ pub fn plugin(app: &mut App) {
             sub_emitter::plugin,
             particle_flags::plugin,
             collider_properties::plugin,
+            project_properties::plugin,
         ))
         .add_systems(
             Update,
@@ -130,6 +132,9 @@ struct EmitterInspectorContent;
 
 #[derive(Component)]
 struct ColliderInspectorContent;
+
+#[derive(Component)]
+struct ProjectInspectorContent;
 
 #[derive(Component)]
 struct PanelTitleText;
@@ -223,6 +228,25 @@ fn setup_inspector_panel(
                                 );
                                 collider_content.spawn(transform::transform_section(&asset_server));
                             });
+
+                        content
+                            .spawn((
+                                ProjectInspectorContent,
+                                Node {
+                                    width: percent(100),
+                                    flex_direction: FlexDirection::Column,
+                                    display: Display::None,
+                                    ..default()
+                                },
+                            ))
+                            .with_children(|project_content| {
+                                project_content.spawn(
+                                    project_properties::project_properties_section(&asset_server),
+                                );
+                                project_content.spawn(project_properties::project_runtime_section(
+                                    &asset_server,
+                                ));
+                            });
                     });
             });
     }
@@ -236,6 +260,7 @@ fn toggle_inspector_content(
         (
             With<EmitterInspectorContent>,
             Without<ColliderInspectorContent>,
+            Without<ProjectInspectorContent>,
             Without<EnabledCheckbox>,
         ),
     >,
@@ -244,6 +269,16 @@ fn toggle_inspector_content(
         (
             With<ColliderInspectorContent>,
             Without<EmitterInspectorContent>,
+            Without<ProjectInspectorContent>,
+            Without<EnabledCheckbox>,
+        ),
+    >,
+    mut project_content: Query<
+        &mut Node,
+        (
+            With<ProjectInspectorContent>,
+            Without<EmitterInspectorContent>,
+            Without<ColliderInspectorContent>,
             Without<EnabledCheckbox>,
         ),
     >,
@@ -253,6 +288,7 @@ fn toggle_inspector_content(
             With<EnabledCheckbox>,
             Without<EmitterInspectorContent>,
             Without<ColliderInspectorContent>,
+            Without<ProjectInspectorContent>,
         ),
     >,
 ) {
@@ -278,6 +314,13 @@ fn toggle_inspector_content(
         Display::None
     };
 
+    let project_display =
+        if active_tab.0 == SidebarTab::Project && editor_state.current_project.is_some() {
+            Display::Flex
+        } else {
+            Display::None
+        };
+
     for mut node in &mut emitter_content {
         if node.display != emitter_display {
             node.display = emitter_display;
@@ -287,6 +330,12 @@ fn toggle_inspector_content(
     for mut node in &mut collider_content {
         if node.display != collider_display {
             node.display = collider_display;
+        }
+    }
+
+    for mut node in &mut project_content {
+        if node.display != project_display {
+            node.display = project_display;
         }
     }
 

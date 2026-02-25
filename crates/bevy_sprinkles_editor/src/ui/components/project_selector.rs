@@ -809,7 +809,7 @@ fn handle_create_project(
         }],
         vec![],
         false,
-        None,
+        Default::default(),
     );
 
     let result = Arc::new(Mutex::new(None));

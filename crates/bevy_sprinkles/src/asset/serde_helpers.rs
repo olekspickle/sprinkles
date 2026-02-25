@@ -27,3 +27,7 @@ pub(crate) fn is_zero_vec3(v: &Vec3) -> bool {
 pub(crate) fn is_one_vec3(v: &Vec3) -> bool {
     *v == Vec3::ONE
 }
+
+pub(crate) fn is_empty_string(v: &String) -> bool {
+    v.is_empty()
+}

@@ -795,6 +795,13 @@ fn spawn_field_widget(
             commands.spawn((binding, variant_edit(props))).id()
         }
 
+        FieldKind::String => commands
+            .spawn((
+                binding,
+                text_edit(TextEditProps::default().with_label(label)),
+            ))
+            .id(),
+
         FieldKind::Curve | FieldKind::AnimatedVelocity => commands.spawn_empty().id(),
     }
 }

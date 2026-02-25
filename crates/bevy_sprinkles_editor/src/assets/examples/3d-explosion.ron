@@ -868,8 +868,8 @@
             position: (0.0, -2.0, 0.0),
         ),
     ],
-    authors: Some((
-        inspired_by: Some("Brackeys"),
+    authors: (
+        inspired_by: "Brackeys",
         submitted_by: "DoceAzedo",
-    )),
+    ),
 )

@@ -142,7 +142,7 @@ fn load_initial_project(
         }],
         vec![],
         false,
-        None,
+        Default::default(),
     );
     let handle = assets.add(asset);
     editor_state.current_project = Some(handle);
