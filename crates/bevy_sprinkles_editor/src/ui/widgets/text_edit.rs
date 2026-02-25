@@ -8,6 +8,7 @@ use bevy_ui_text_input::{
     actions::{TextInputAction, TextInputEdit},
 };
 
+use bevy::ui::UiGlobalTransform;
 use bevy::window::SystemCursorIcon;
 
 use crate::ui::icons::ICON_EXPAND_HORIZONTAL;
@@ -38,6 +39,7 @@ pub fn plugin(app: &mut App) {
             (
                 handle_focus_style,
                 handle_numeric_increment,
+                handle_tab_navigation,
                 handle_unfocus,
                 handle_drag_value,
                 handle_click_to_focus,
@@ -558,6 +560,51 @@ fn handle_suffix(
         let show = focus.0 != Some(entity) && !buffer.get_text().is_empty();
         node.left = px(layout_info.size.x + offset);
         node.display = if show { Display::Flex } else { Display::None };
+    }
+}
+
+fn handle_tab_navigation(
+    mut focus: ResMut<InputFocus>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    text_edits: Query<(Entity, &UiGlobalTransform), With<EditorTextEdit>>,
+    mut queues: Query<&mut TextInputQueue>,
+) {
+    if !keyboard.just_pressed(KeyCode::Tab) {
+        return;
+    }
+
+    let Some(focused_entity) = focus.0 else {
+        return;
+    };
+
+    if text_edits.get(focused_entity).is_err() {
+        return;
+    }
+
+    let shift = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+
+    let mut entities: Vec<(Entity, Vec2)> = text_edits
+        .iter()
+        .map(|(e, gt)| (e, gt.translation))
+        .collect();
+    entities.sort_by(|a, b| a.1.y.total_cmp(&b.1.y).then(a.1.x.total_cmp(&b.1.x)));
+
+    let Some(current_idx) = entities.iter().position(|(e, _)| *e == focused_entity) else {
+        return;
+    };
+
+    let len = entities.len();
+    let next_idx = if shift {
+        (current_idx + len - 1) % len
+    } else {
+        (current_idx + 1) % len
+    };
+
+    let next_entity = entities[next_idx].0;
+    focus.0 = Some(next_entity);
+
+    if let Ok(mut queue) = queues.get_mut(next_entity) {
+        queue.add(TextInputAction::Edit(TextInputEdit::SelectAll));
     }
 }
 
