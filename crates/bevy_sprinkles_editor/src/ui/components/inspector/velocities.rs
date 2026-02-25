@@ -355,7 +355,7 @@ fn handle_add_button_click(
         .map(|(e, _)| e);
     let Some(anchor) = add_btn_entity else { return };
 
-    for (popover_entity, _) in &existing_popovers {
+    if let Some((popover_entity, _)) = (&existing_popovers).into_iter().next() {
         commands.entity(popover_entity).try_despawn();
         return;
     }
