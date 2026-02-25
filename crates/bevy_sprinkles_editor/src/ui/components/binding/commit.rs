@@ -192,11 +192,10 @@ pub(super) fn handle_combobox_change(
 
     let is_optional = matches!(binding.kind, FieldKind::ComboBox { optional: true, .. });
 
-    let Some(data) = get_inspected_data_mut(&ctx.editor_state, &mut ctx.assets) else {
+    let Some((data, fixed_seed)) = ctx.resolve_data_mut(&binding) else {
         return;
     };
 
-    let fixed_seed = read_fixed_seed(&*data);
     let changed = if is_optional {
         let inner_variant = if trigger.selected == 0 {
             None

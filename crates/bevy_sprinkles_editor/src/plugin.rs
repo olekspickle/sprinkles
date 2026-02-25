@@ -11,7 +11,7 @@ use crate::viewport::{
     draw_collider_gizmos, handle_playback_play_event, handle_playback_reset_event,
     handle_playback_seek_event, handle_respawn_colliders, handle_respawn_emitters, orbit_camera,
     respawn_preview_on_emitter_change, setup_camera, setup_floor, spawn_preview_particle_system,
-    sync_playback_state, zoom_camera,
+    sync_playback_state, sync_viewport_settings, zoom_camera,
 };
 
 #[derive(Resource, Default)]
@@ -57,6 +57,7 @@ impl Plugin for SprinklesEditorPlugin {
                     spawn_preview_particle_system,
                     despawn_preview_on_project_change,
                     sync_playback_state,
+                    sync_viewport_settings,
                     draw_collider_gizmos,
                 ),
             );

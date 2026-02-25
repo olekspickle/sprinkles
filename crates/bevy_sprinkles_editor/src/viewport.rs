@@ -1,9 +1,11 @@
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 use std::ops::Range;
 
+use bevy::anti_alias::smaa::{Smaa, SmaaPreset};
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::RenderTarget;
 use bevy::color::palettes::tailwind::{ZINC_200, ZINC_950};
+use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::image::{ImageAddressMode, ImageSamplerDescriptor};
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::math::Affine2;
@@ -12,6 +14,8 @@ use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::render_resource::{TextureDimension, TextureFormat, TextureUsages};
 use bevy_sprinkles::prelude::*;
+
+use crate::io::{EditorBloom, EditorData, EditorSmaaPreset, EditorTonemapping};
 
 use crate::state::{
     EditorState, Inspectable, PlaybackPlayEvent, PlaybackResetEvent, PlaybackSeekEvent,
@@ -58,7 +62,11 @@ impl Default for CameraSettings {
     }
 }
 
-pub fn setup_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+pub fn setup_camera(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    editor_data: Res<EditorData>,
+) {
     let mut image = Image::new_uninit(
         default(),
         TextureDimension::D2,
@@ -71,8 +79,15 @@ pub fn setup_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
 
     commands.spawn((Name::new("UiCamera"), Camera2d));
 
+    let settings = &editor_data.settings;
     let initial_position = ORBIT_TARGET + ORBIT_OFFSET.normalize() * INITIAL_ORBIT_DISTANCE;
-    commands.spawn((
+    let tonemapping = settings
+        .tonemapping
+        .as_ref()
+        .map(to_bevy_tonemapping)
+        .unwrap_or(Tonemapping::None);
+
+    let mut camera = commands.spawn((
         EditorCamera,
         Name::new("ViewportCamera"),
         Camera3d::default(),
@@ -83,7 +98,8 @@ pub fn setup_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         },
         RenderTarget::Image(image_handle.into()),
         Transform::from_translation(initial_position).looking_at(ORBIT_TARGET, Vec3::Y),
-        Bloom::NATURAL,
+        Msaa::Off,
+        tonemapping,
         DistanceFog {
             color: ZINC_950.into(),
             falloff: FogFalloff::Linear {
@@ -93,6 +109,15 @@ pub fn setup_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             ..default()
         },
     ));
+
+    if let Some(bloom) = settings.bloom.as_ref() {
+        camera.insert(to_bevy_bloom(bloom));
+    }
+    if let Some(smaa) = settings.anti_aliasing.as_ref() {
+        camera.insert(Smaa {
+            preset: to_bevy_smaa_preset(smaa),
+        });
+    }
 
     commands.spawn((
         DirectionalLight {
@@ -572,5 +597,96 @@ pub fn sync_playback_state(
                 }
             }
         }
+    }
+}
+
+fn to_bevy_tonemapping(value: &EditorTonemapping) -> Tonemapping {
+    match value {
+        EditorTonemapping::Reinhard => Tonemapping::Reinhard,
+        EditorTonemapping::ReinhardLuminance => Tonemapping::ReinhardLuminance,
+        EditorTonemapping::AcesFitted => Tonemapping::AcesFitted,
+        EditorTonemapping::AgX => Tonemapping::AgX,
+        EditorTonemapping::SomewhatBoringDisplayTransform => {
+            Tonemapping::SomewhatBoringDisplayTransform
+        }
+        EditorTonemapping::TonyMcMapface => Tonemapping::TonyMcMapface,
+        EditorTonemapping::BlenderFilmic => Tonemapping::BlenderFilmic,
+    }
+}
+
+fn to_bevy_bloom(value: &EditorBloom) -> Bloom {
+    match value {
+        EditorBloom::Natural => Bloom::NATURAL,
+        EditorBloom::Anamorphic => Bloom::ANAMORPHIC,
+        EditorBloom::OldSchool => Bloom::OLD_SCHOOL,
+        EditorBloom::ScreenBlur => Bloom::SCREEN_BLUR,
+    }
+}
+
+fn to_bevy_smaa_preset(value: &EditorSmaaPreset) -> SmaaPreset {
+    match value {
+        EditorSmaaPreset::Low => SmaaPreset::Low,
+        EditorSmaaPreset::Medium => SmaaPreset::Medium,
+        EditorSmaaPreset::High => SmaaPreset::High,
+        EditorSmaaPreset::Ultra => SmaaPreset::Ultra,
+    }
+}
+
+pub fn sync_viewport_settings(
+    mut commands: Commands,
+    editor_data: Res<EditorData>,
+    mut camera: Query<
+        (
+            Entity,
+            &mut Tonemapping,
+            Option<&mut Bloom>,
+            Option<&mut Smaa>,
+        ),
+        With<EditorCamera>,
+    >,
+) {
+    if !editor_data.is_changed() {
+        return;
+    }
+
+    let Ok((entity, mut tonemapping, bloom, smaa)) = camera.single_mut() else {
+        return;
+    };
+
+    let settings = &editor_data.settings;
+
+    let target_tonemapping = settings
+        .tonemapping
+        .as_ref()
+        .map(to_bevy_tonemapping)
+        .unwrap_or(Tonemapping::None);
+    *tonemapping = target_tonemapping;
+
+    match (&settings.bloom, bloom) {
+        (Some(value), Some(mut current)) => {
+            *current = to_bevy_bloom(value);
+        }
+        (Some(value), None) => {
+            commands.entity(entity).insert(to_bevy_bloom(value));
+        }
+        (None, Some(_)) => {
+            commands.entity(entity).remove::<Bloom>();
+        }
+        (None, None) => {}
+    }
+
+    match (&settings.anti_aliasing, smaa) {
+        (Some(value), Some(mut current)) => {
+            current.preset = to_bevy_smaa_preset(value);
+        }
+        (Some(value), None) => {
+            commands.entity(entity).insert(Smaa {
+                preset: to_bevy_smaa_preset(value),
+            });
+        }
+        (None, Some(_)) => {
+            commands.entity(entity).remove::<Smaa>();
+        }
+        (None, None) => {}
     }
 }

@@ -12,6 +12,9 @@ pub fn plugin(app: &mut App) {
     crate::assets::extract_examples(&examples_dir());
     let editor_data = load_editor_data();
     app.register_type::<EditorSettings>()
+        .register_type::<EditorTonemapping>()
+        .register_type::<EditorBloom>()
+        .register_type::<EditorSmaaPreset>()
         .insert_resource(editor_data);
 }
 
@@ -24,13 +27,71 @@ pub struct EditorData {
 
 #[derive(Serialize, Deserialize, Reflect, Clone)]
 pub struct EditorSettings {
+    #[serde(default = "default_show_fps")]
     pub show_fps: bool,
+    #[serde(default = "default_tonemapping")]
+    pub tonemapping: Option<EditorTonemapping>,
+    #[serde(default = "default_bloom")]
+    pub bloom: Option<EditorBloom>,
+    #[serde(default = "default_anti_aliasing")]
+    pub anti_aliasing: Option<EditorSmaaPreset>,
+}
+
+fn default_show_fps() -> bool {
+    true
+}
+
+fn default_tonemapping() -> Option<EditorTonemapping> {
+    Some(EditorTonemapping::TonyMcMapface)
+}
+
+fn default_bloom() -> Option<EditorBloom> {
+    Some(EditorBloom::Natural)
+}
+
+fn default_anti_aliasing() -> Option<EditorSmaaPreset> {
+    Some(EditorSmaaPreset::High)
 }
 
 impl Default for EditorSettings {
     fn default() -> Self {
-        Self { show_fps: true }
+        Self {
+            show_fps: default_show_fps(),
+            tonemapping: default_tonemapping(),
+            bloom: default_bloom(),
+            anti_aliasing: default_anti_aliasing(),
+        }
     }
+}
+
+#[derive(Serialize, Deserialize, Reflect, Clone, Default, PartialEq)]
+pub enum EditorTonemapping {
+    #[default]
+    Reinhard,
+    ReinhardLuminance,
+    AcesFitted,
+    AgX,
+    SomewhatBoringDisplayTransform,
+    TonyMcMapface,
+    BlenderFilmic,
+}
+
+#[derive(Serialize, Deserialize, Reflect, Clone, Default, PartialEq)]
+pub enum EditorBloom {
+    #[default]
+    Natural,
+    Anamorphic,
+    OldSchool,
+    ScreenBlur,
+}
+
+#[derive(Serialize, Deserialize, Reflect, Clone, Default, PartialEq)]
+pub enum EditorSmaaPreset {
+    Low,
+    Medium,
+    #[default]
+    High,
+    Ultra,
 }
 
 #[derive(Serialize, Deserialize, Default)]

@@ -280,7 +280,7 @@ pub(crate) struct ComboBoxFieldConfig {
     initialized: bool,
 }
 
-fn combobox_field(label: String, options: Vec<ComboBoxOptionData>) -> impl Bundle {
+pub(crate) fn combobox_field(label: String, options: Vec<ComboBoxOptionData>) -> impl Bundle {
     (
         ComboBoxFieldConfig {
             label,

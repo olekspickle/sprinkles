@@ -94,14 +94,14 @@ impl VariantConfig {
     }
 
     pub fn override_combobox<T: Typed>(self, name: &'static str) -> Self {
-        let options = combobox_options_to_combobox(combobox_options_from_reflect::<T>());
+        let options = combobox_options_to_combobox(&combobox_options_from_reflect::<T>());
         self.override_field(name, VariantField::combobox(name, options))
     }
 
     pub fn override_optional_combobox<T: Typed>(self, name: &'static str) -> Self {
         let mut options = vec![ComboBoxOption::new("Disabled", "Disabled")];
         options.extend(combobox_options_to_combobox(
-            combobox_options_from_reflect::<T>(),
+            &combobox_options_from_reflect::<T>(),
         ));
         self.override_field(name, VariantField::optional_combobox(name, options))
     }
@@ -273,6 +273,14 @@ pub fn field_from_type_path(
 }
 
 pub fn combobox_options_from_reflect<T: Typed>() -> Vec<ComboBoxOptionData> {
+    combobox_options_from_reflect_inner::<T>(true)
+}
+
+pub fn combobox_options_from_reflect_raw<T: Typed>() -> Vec<ComboBoxOptionData> {
+    combobox_options_from_reflect_inner::<T>(false)
+}
+
+fn combobox_options_from_reflect_inner<T: Typed>(format_labels: bool) -> Vec<ComboBoxOptionData> {
     let TypeInfo::Enum(enum_info) = T::type_info() else {
         return Vec::new();
     };
@@ -281,17 +289,21 @@ pub fn combobox_options_from_reflect<T: Typed>() -> Vec<ComboBoxOptionData> {
         .filter_map(|i| {
             let variant = enum_info.variant_at(i)?;
             let name = variant.name();
-            let label = name_to_label(name);
+            let label = if format_labels {
+                name_to_label(name)
+            } else {
+                name.to_string()
+            };
             Some(ComboBoxOptionData::new(label).with_value(name))
         })
         .collect()
 }
 
-fn combobox_options_to_combobox(opts: Vec<ComboBoxOptionData>) -> Vec<ComboBoxOption> {
-    opts.into_iter()
+pub(super) fn combobox_options_to_combobox(opts: &[ComboBoxOptionData]) -> Vec<ComboBoxOption> {
+    opts.iter()
         .map(|o| {
-            let value = o.value.unwrap_or_else(|| o.label.clone());
-            ComboBoxOption::new(o.label, value)
+            let value = o.value.clone().unwrap_or_else(|| o.label.clone());
+            ComboBoxOption::new(o.label.clone(), value)
         })
         .collect()
 }
