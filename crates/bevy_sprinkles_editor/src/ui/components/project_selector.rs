@@ -12,9 +12,7 @@ use bevy_ui_text_input::{
 
 use bevy_sprinkles::prelude::*;
 
-use crate::io::{
-    EditorData, data_dir, project_path, projects_dir, save_editor_data, simplify_path,
-};
+use crate::io::{EditorData, data_dir, project_path, projects_dir, save_editor_data};
 use crate::project::{
     BrowseOpenProjectEvent, OpenProjectEvent, SaveResult, load_project_from_path,
     save_project_to_path,
@@ -35,6 +33,7 @@ use crate::ui::widgets::dialog::{
 use crate::ui::widgets::popover::{EditorPopover, PopoverPlacement, PopoverProps, popover};
 use crate::ui::widgets::text_edit::{EditorTextEdit, TextEditProps, text_edit};
 use crate::ui::widgets::utils::is_descendant_of;
+use crate::utils::simplify_path;
 
 pub fn plugin(app: &mut App) {
     app.add_observer(handle_trigger_click)

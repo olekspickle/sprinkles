@@ -4,6 +4,7 @@ mod plugin;
 mod project;
 mod state;
 mod ui;
+mod utils;
 mod viewport;
 
 use bevy::asset::UnapprovedPathMode;

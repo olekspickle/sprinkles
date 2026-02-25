@@ -1,7 +1,7 @@
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use bevy::prelude::*;
 use bevy::tasks::IoTaskPool;
@@ -94,18 +94,6 @@ pub fn project_path(relative_path: &str) -> PathBuf {
     } else {
         PathBuf::from(relative_path)
     }
-}
-
-pub fn simplify_path(path: &Path) -> String {
-    #[cfg(unix)]
-    if let Some(home) = env::var_os("HOME") {
-        let home_path = PathBuf::from(home);
-        if let Ok(relative) = path.strip_prefix(&home_path) {
-            return format!("~/{}", relative.to_string_lossy());
-        }
-    }
-
-    path.to_string_lossy().to_string()
 }
 
 pub fn load_editor_data() -> EditorData {

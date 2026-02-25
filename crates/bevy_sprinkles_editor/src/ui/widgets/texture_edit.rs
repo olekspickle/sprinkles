@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use bevy::color::palettes::tailwind;
@@ -10,7 +10,6 @@ use bevy::tasks::IoTaskPool;
 use bevy_sprinkles::prelude::*;
 use bevy_sprinkles::textures::preset::{PresetTexture, TextureRef};
 
-use crate::io::simplify_path;
 use crate::state::EditorState;
 use crate::ui::components::binding::{
     FieldBinding, get_inspecting_emitter, resolve_variant_field_ref,
@@ -30,6 +29,7 @@ use crate::ui::components::inspector::FieldKind;
 use crate::ui::icons::{ICON_FOLDER_OPEN, ICON_HEART};
 use crate::ui::widgets::alert::{AlertSpan, AlertVariant, alert};
 use crate::ui::widgets::link::spawn_link_hitbox;
+use crate::utils::{MAX_DISPLAY_PATH_LEN, truncate_path};
 
 const PRESET_GRID_MAX_HEIGHT: f32 = 256.0;
 const PREVIEW_SIZE: f32 = 96.0;
@@ -831,21 +831,8 @@ fn extract_texture_ref_from_reflect(value: &dyn PartialReflect) -> Option<Textur
     }
 }
 
-const MAX_DISPLAY_PATH_LEN: usize = 48;
-
 fn format_display_path(path: &str) -> String {
-    let simplified = simplify_path(Path::new(path));
-    truncate_middle(&simplified, MAX_DISPLAY_PATH_LEN)
-}
-
-fn truncate_middle(s: &str, max_len: usize) -> String {
-    if s.len() < max_len {
-        return s.to_string();
-    }
-    let keep = max_len.saturating_sub(3);
-    let head = keep / 2;
-    let tail = keep - head;
-    format!("{}...{}", &s[..head], &s[s.len() - tail..])
+    truncate_path(path, MAX_DISPLAY_PATH_LEN)
 }
 
 // TODO: `/data/assets/src-backup/` would be wrongly classified

@@ -9,9 +9,10 @@ use bevy_sprinkles::asset::versioning::VersionStatus;
 use bevy_sprinkles::prelude::*;
 use inflector::Inflector;
 
-use crate::io::{EditorData, project_path, projects_dir, save_editor_data, simplify_path};
+use crate::io::{EditorData, project_path, projects_dir, save_editor_data};
 use crate::state::{DirtyState, EditorState, Inspectable, Inspecting};
 use crate::ui::components::toasts::ToastEvent;
+use crate::utils::simplify_path;
 
 pub fn plugin(app: &mut App) {
     app.add_observer(on_open_project_event)
