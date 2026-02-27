@@ -63,6 +63,13 @@ pub fn settings_properties_section(asset_server: &AssetServer) -> impl Bundle {
             ),
             (
                 fields_row(),
+                children![(
+                    FieldBinding::editor_settings("vsync", FieldKind::Bool),
+                    checkbox(CheckboxProps::new("V-Sync").checked(true), asset_server,),
+                )],
+            ),
+            (
+                fields_row(),
                 children![settings_combobox(
                     "tonemapping",
                     None,

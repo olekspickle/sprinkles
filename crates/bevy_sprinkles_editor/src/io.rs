@@ -29,6 +29,8 @@ pub struct EditorData {
 pub struct EditorSettings {
     #[serde(default = "default_show_fps")]
     pub show_fps: bool,
+    #[serde(default = "default_vsync")]
+    pub vsync: bool,
     #[serde(default = "default_tonemapping")]
     pub tonemapping: Option<EditorTonemapping>,
     #[serde(default = "default_bloom")]
@@ -38,6 +40,10 @@ pub struct EditorSettings {
 }
 
 fn default_show_fps() -> bool {
+    true
+}
+
+fn default_vsync() -> bool {
     true
 }
 
@@ -57,6 +63,7 @@ impl Default for EditorSettings {
     fn default() -> Self {
         Self {
             show_fps: default_show_fps(),
+            vsync: default_vsync(),
             tonemapping: default_tonemapping(),
             bloom: default_bloom(),
             anti_aliasing: default_anti_aliasing(),

@@ -13,6 +13,7 @@ use bevy::picking::hover::Hovered;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::render_resource::{TextureDimension, TextureFormat, TextureUsages};
+use bevy::window::PresentMode;
 use bevy_sprinkles::prelude::*;
 
 use crate::io::{EditorBloom, EditorData, EditorSmaaPreset, EditorTonemapping};
@@ -644,6 +645,7 @@ pub fn sync_viewport_settings(
         ),
         With<EditorCamera>,
     >,
+    mut window: Query<&mut Window>,
 ) {
     if !editor_data.is_changed() {
         return;
@@ -654,6 +656,17 @@ pub fn sync_viewport_settings(
     };
 
     let settings = &editor_data.settings;
+
+    if let Ok(mut window) = window.single_mut() {
+        let target_present_mode = if settings.vsync {
+            PresentMode::AutoVsync
+        } else {
+            PresentMode::AutoNoVsync
+        };
+        if window.present_mode != target_present_mode {
+            window.present_mode = target_present_mode;
+        }
+    }
 
     let target_tonemapping = settings
         .tonemapping
