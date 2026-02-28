@@ -705,7 +705,7 @@ fn get_radial_displacement(
         return radial_displacement;
     }
 
-    let pivot = params.velocity_pivot;
+    let pivot = (params.emitter_transform * vec4(params.velocity_pivot, 1.0)).xyz;
     let to_particle = position - pivot;
     let distance_to_pivot = length(to_particle);
 
