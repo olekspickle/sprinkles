@@ -333,6 +333,10 @@ pub struct EmitterData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sub_emitter: Option<SubEmitterConfig>,
 
+    /// Trail configuration for this emitter.
+    #[serde(default, skip_serializing_if = "EmitterTrail::should_skip")]
+    pub trail: EmitterTrail,
+
     /// Bitflags controlling per-particle behavior (Y rotation, Z-axis disable, etc.).
     #[serde(default)]
     #[reflect(ignore)]
@@ -360,6 +364,7 @@ impl Default for EmitterData {
             turbulence: EmitterTurbulence::default(),
             collision: EmitterCollision::default(),
             sub_emitter: None,
+            trail: EmitterTrail::default(),
             particle_flags: ParticleFlags::empty(),
         }
     }
@@ -499,6 +504,44 @@ pub enum ParticleMesh {
         #[serde(default, skip_serializing_if = "is_zero_vec3")]
         subdivide: Vec3,
     },
+    /// A tube-shaped trail mesh that follows the particle's path.
+    TubeTrail {
+        /// Radius of the tube cross-section. Defaults to `0.5`.
+        radius: f32,
+        /// Number of radial segments around the tube. Defaults to `8`.
+        radial_steps: u32,
+        /// Number of trail sections along the tube length. Defaults to `8`.
+        sections: u32,
+        /// Length of each trail section. Defaults to `0.2`.
+        section_length: f32,
+        /// Number of ring subdivisions within each section. Defaults to `1`.
+        #[serde(default = "default_section_rings")]
+        section_rings: u32,
+    },
+    /// A ribbon-shaped trail mesh that follows the particle's path.
+    RibbonTrail {
+        /// Half-width of the ribbon. Defaults to `1.0`.
+        size: f32,
+        /// Number of trail sections along the ribbon length. Defaults to `8`.
+        sections: u32,
+        /// Length of each trail section. Defaults to `0.2`.
+        section_length: f32,
+        /// Number of subdivisions within each section for smoother curves. Defaults to `3`.
+        section_segments: u32,
+        /// Number of ring subdivisions within each section. Defaults to `1`.
+        #[serde(default = "default_section_rings")]
+        section_rings: u32,
+        /// The ribbon cross-section shape. Defaults to [`RibbonTrailShape::Flat`].
+        #[serde(default)]
+        shape: RibbonTrailShape,
+    },
+}
+
+impl ParticleMesh {
+    /// Returns `true` if this is a trail mesh variant.
+    pub fn is_trail(&self) -> bool {
+        matches!(self, Self::TubeTrail { .. } | Self::RibbonTrail { .. })
+    }
 }
 
 fn default_quad_size() -> Vec2 {
@@ -515,6 +558,10 @@ fn default_sphere_segments() -> u32 {
 
 fn default_sphere_rings() -> u32 {
     16
+}
+
+fn default_section_rings() -> u32 {
+    1
 }
 
 fn default_prism_left_to_right() -> f32 {
@@ -585,6 +632,34 @@ impl std::hash::Hash for ParticleMesh {
                 subdivide.x.to_bits().hash(hasher);
                 subdivide.y.to_bits().hash(hasher);
                 subdivide.z.to_bits().hash(hasher);
+            }
+            Self::TubeTrail {
+                radius,
+                radial_steps,
+                sections,
+                section_length,
+                section_rings,
+            } => {
+                radius.to_bits().hash(hasher);
+                radial_steps.hash(hasher);
+                sections.hash(hasher);
+                section_length.to_bits().hash(hasher);
+                section_rings.hash(hasher);
+            }
+            Self::RibbonTrail {
+                size,
+                sections,
+                section_length,
+                section_segments,
+                section_rings,
+                shape,
+            } => {
+                size.to_bits().hash(hasher);
+                sections.hash(hasher);
+                section_length.to_bits().hash(hasher);
+                section_segments.hash(hasher);
+                section_rings.hash(hasher);
+                shape.hash(hasher);
             }
         }
     }
@@ -1178,6 +1253,81 @@ impl Default for ColliderData {
             initial_transform: InitialTransform::default(),
         }
     }
+}
+
+fn default_trail_stretch_time() -> f32 {
+    0.3
+}
+
+fn default_trail_sections() -> u32 {
+    8
+}
+
+fn default_trail_section_length() -> f32 {
+    0.2
+}
+
+/// Trail configuration for an emitter.
+///
+/// When enabled, each particle leaves a visible trail behind it as it moves.
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
+pub struct EmitterTrail {
+    /// Whether trails are enabled. Defaults to `false`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub enabled: bool,
+    /// Time in seconds for the trail to fully stretch to its maximum length.
+    ///
+    /// Defaults to `0.3`.
+    #[serde(default = "default_trail_stretch_time")]
+    pub stretch_time: f32,
+    /// The number of trail sections (segments including head). Defaults to `8`.
+    #[serde(default = "default_trail_sections")]
+    pub sections: u32,
+    /// The length of each trail section. Defaults to `0.2`.
+    #[serde(default = "default_trail_section_length")]
+    pub section_length: f32,
+    /// Optional curve that controls trail thickness from head (0) to tail (1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thickness_curve: Option<CurveTexture>,
+}
+
+impl Default for EmitterTrail {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            stretch_time: default_trail_stretch_time(),
+            sections: default_trail_sections(),
+            section_length: default_trail_section_length(),
+            thickness_curve: None,
+        }
+    }
+}
+
+impl EmitterTrail {
+    pub(crate) fn should_skip(&self) -> bool {
+        if self.enabled {
+            return false;
+        }
+        let d = Self::default();
+        self.stretch_time == d.stretch_time
+            && self.sections == d.sections
+            && self.section_length == d.section_length
+            && self.thickness_curve.is_none()
+    }
+
+    pub(crate) fn trail_size(&self) -> u32 {
+        if self.enabled { self.sections } else { 1 }
+    }
+}
+
+/// The shape of a ribbon trail mesh cross-section.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, Reflect)]
+pub enum RibbonTrailShape {
+    /// A single flat quad strip.
+    #[default]
+    Flat,
+    /// Two perpendicular quad strips forming a cross.
+    Cross,
 }
 
 /// Attribution information for a particle system.

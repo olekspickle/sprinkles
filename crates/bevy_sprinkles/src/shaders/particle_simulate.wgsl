@@ -3,6 +3,7 @@
     Particle,
     CurveUniform,
     SubEmissionEntry,
+    TrailHistoryEntry,
     PARTICLE_FLAG_ACTIVE,
     EMITTER_FLAG_DISABLE_Z,
     EMISSION_FLAG_HAS_POSITION,
@@ -134,6 +135,17 @@ struct EmitterParams {
     _sub_emitter_pad2: u32,
 
     emitter_transform: mat4x4<f32>,
+
+    // trail
+    trail_size: u32,
+    trail_pass: u32,
+    trail_stretch_time: f32,
+    trail_history_size: u32,
+
+    trail_history_write_index: u32,
+    trail_effective_fps: f32,
+    _trail_pad0: u32,
+    _trail_pad1: u32,
 }
 
 struct Collider {
@@ -193,12 +205,98 @@ struct SubEmissionBuffer {
 
 @group(0) @binding(21) var<storage, read_write> dst_emission_buffer: SubEmissionBuffer;
 @group(0) @binding(22) var<storage, read_write> src_emission_buffer: SubEmissionBuffer;
+@group(0) @binding(23) var<storage, read_write> trail_history: array<TrailHistoryEntry>;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let idx = global_id.x;
-    if (idx >= params.amount) {
+    let thread_idx = global_id.x;
+
+    // trail pass 1: process trail segments (copy head state, offset position)
+    if (params.trail_size > 1u && params.trail_pass == 1u) {
+        // thread_idx maps to trail segments (skipping heads)
+        if (thread_idx >= params.amount * (params.trail_size - 1u)) {
+            return;
+        }
+
+        // map thread to actual buffer slot, skipping head slots
+        let particle_idx = thread_idx / (params.trail_size - 1u);
+        let segment_within = thread_idx % (params.trail_size - 1u);
+        let head_slot = particle_idx * params.trail_size;
+        let segment_slot = head_slot + segment_within + 1u;
+        let section_frac = f32(segment_within + 1u) / f32(params.trail_size - 1u);
+
+        let head = particles[head_slot];
+        var p = head;
+
+        if (params.trail_history_size > 0u) {
+            let head_age = head.custom.x;
+            let effective_stretch = min(head_age, params.trail_stretch_time);
+            let target_age = head_age - section_frac * effective_stretch;
+
+            let wi = params.trail_history_write_index;
+            let hs = params.trail_history_size;
+            let base = particle_idx * hs;
+
+            // scan backwards from most recent entry to find the two entries
+            // whose recorded ages bracket target_age
+            var newer_idx = wi;
+            var older_idx = wi;
+            var found_older = false;
+
+            for (var i = 1u; i < hs; i++) {
+                let idx = (wi + hs - i) % hs;
+                let entry_age = trail_history[base + idx].velocity.w;
+                if (entry_age <= target_age) {
+                    older_idx = idx;
+                    found_older = true;
+                    break;
+                }
+                newer_idx = idx;
+            }
+
+            if (!found_older) {
+                older_idx = newer_idx;
+            }
+
+            let older_entry = trail_history[base + older_idx];
+            let newer_entry = trail_history[base + newer_idx];
+            let age_span = newer_entry.velocity.w - older_entry.velocity.w;
+
+            var t = 0.0;
+            if (age_span > 0.0) {
+                t = clamp((target_age - older_entry.velocity.w) / age_span, 0.0, 1.0);
+            }
+
+            let hist_pos = mix(older_entry.position, newer_entry.position, t);
+            let hist_vel = mix(older_entry.velocity.xyz, newer_entry.velocity.xyz, t);
+            p.position = vec4(hist_pos.xyz, head.position.w);
+            p.velocity = vec4(hist_vel, head.velocity.w);
+        } else {
+            // fallback: parabolic extrapolation
+            let vel = head.velocity.xyz;
+            let age = head.custom.x;
+            let dt = section_frac * min(age, params.trail_stretch_time);
+            let past_pos = head.position.xyz - vel * dt + 0.5 * params.gravity * dt * dt;
+            p.position = vec4(past_pos, head.position.w);
+        }
+
+        particles[segment_slot] = p;
         return;
+    }
+
+    // trail pass 0 or non-trail: process head particles
+    var idx: u32;
+    if (params.trail_size > 1u) {
+        // remap thread index to head particle slot
+        if (thread_idx >= params.amount) {
+            return;
+        }
+        idx = thread_idx * params.trail_size;
+    } else {
+        idx = thread_idx;
+        if (idx >= params.amount) {
+            return;
+        }
     }
 
     var p = particles[idx];
@@ -222,9 +320,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let flags = bitcast<u32>(p.custom.w);
     let is_active = (flags & PARTICLE_FLAG_ACTIVE) != 0u;
 
-    // phase-based emission: each particle has a phase (0-1) based on its index
-    let base_phase = f32(idx) / f32(params.amount);
-    let phase = base_phase + hash_to_float(idx) * params.spawn_time_randomness;
+    // phase-based emission uses the particle index (not the buffer slot)
+    var particle_idx = idx;
+    if (params.trail_size > 1u) {
+        particle_idx = idx / params.trail_size;
+    }
+    let base_phase = f32(particle_idx) / f32(params.amount);
+    let phase = base_phase + hash_to_float(particle_idx) * params.spawn_time_randomness;
     let adjusted_phase = fract(phase * (1.0 - params.explosiveness));
 
     if (params.is_sub_emitter_target != 0u) {
@@ -234,7 +336,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
             if (src_index >= 0) {
                 let entry = src_emission_buffer.data[src_index];
-                p = spawn_particle(idx);
+                p = spawn_particle(particle_idx);
 
                 if ((entry.flags & EMISSION_FLAG_HAS_POSITION) != 0u) {
                     p.position = vec4(entry.position.xyz, p.position.w);
@@ -265,13 +367,29 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
 
         if (should_restart) {
-            p = spawn_particle(idx);
+            p = spawn_particle(particle_idx);
         } else if (is_active) {
             p = update_particle(p);
         }
     }
 
     particles[idx] = p;
+
+    // write position history for trail readback
+    if (params.trail_history_size > 0u) {
+        let now_active = (bitcast<u32>(p.custom.w) & PARTICLE_FLAG_ACTIVE) != 0u;
+        let just_spawned = now_active && p.custom.x == 0.0;
+        let base = thread_idx * params.trail_history_size;
+        let entry = TrailHistoryEntry(p.position, vec4(p.velocity.xyz, p.custom.x));
+        if (just_spawned) {
+            // fill entire ring buffer so trail grows from zero
+            for (var h = 0u; h < params.trail_history_size; h++) {
+                trail_history[base + h] = entry;
+            }
+        } else if (now_active) {
+            trail_history[base + params.trail_history_write_index] = entry;
+        }
+    }
 }
 
 // transforms a local-space position to spawn space via emitter_transform

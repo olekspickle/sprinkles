@@ -498,8 +498,10 @@ fn apply_with_change_check(target: &mut dyn PartialReflect, value: &dyn PartialR
     if let Some(true) = target.reflect_partial_eq(value) {
         return false;
     }
-    target.apply(value);
-    true
+    match target.try_apply(value) {
+        Ok(()) => true,
+        Err(_) => false,
+    }
 }
 
 pub(super) fn format_f32(v: f32) -> String {

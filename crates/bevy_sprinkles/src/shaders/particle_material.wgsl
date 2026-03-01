@@ -3,12 +3,11 @@
     ParticleEmitterUniforms,
     PARTICLE_FLAG_ACTIVE,
     EMITTER_FLAG_ROTATE_Y,
-    TRANSFORM_ALIGN_SHIFT,
-    TRANSFORM_ALIGN_MASK,
     TRANSFORM_ALIGN_BILLBOARD,
     TRANSFORM_ALIGN_Y_TO_VELOCITY,
     TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY,
     TRANSFORM_ALIGN_BILLBOARD_FIXED_Y,
+    TRAIL_THICKNESS_CURVE_SAMPLES,
 }
 #import bevy_pbr::{
     mesh_functions,
@@ -65,6 +64,124 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     // particle index encoded in uv_b.x (instance_index doesn't guarantee particle order)
     let particle_index = u32(vertex.uv_b.x);
+    let trail_size = emitter_uniforms.trail_size;
+    var world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
+
+#ifdef VERTEX_UVS_A
+    out.uv = vertex.uv;
+#endif
+
+#ifdef VERTEX_UVS_B
+    out.uv_b = vertex.uv_b;
+#endif
+
+#ifdef VERTEX_TANGENTS
+    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vertex.tangent, vertex.instance_index);
+#endif
+
+#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
+    out.instance_index = vertex.instance_index;
+#endif
+
+    // trail rendering: position vertices along the trail path
+    if (trail_size > 1u) {
+        let head_slot = particle_index * trail_size;
+        let head_particle = sorted_particles[head_slot];
+        let head_flags = bitcast<u32>(head_particle.custom.w);
+        let is_active = (head_flags & PARTICLE_FLAG_ACTIVE) != 0u;
+
+        let section_frac = vertex.uv_b.y;
+
+        // per-segment interpolation for curved trails
+        let last_seg = trail_size - 1u;
+        let section_f = section_frac * f32(last_seg);
+        let seg_lo = min(u32(section_f), last_seg);
+        let seg_hi = min(seg_lo + 1u, last_seg);
+        let seg_t = section_f - f32(seg_lo);
+
+        let idx_lo = head_slot + seg_lo;
+        let idx_hi = head_slot + seg_hi;
+        let pos_lo = sorted_particles[idx_lo].position.xyz;
+        let pos_hi = sorted_particles[idx_hi].position.xyz;
+        let scale_lo = sorted_particles[idx_lo].position.w;
+        let scale_hi = sorted_particles[idx_hi].position.w;
+
+        let trail_pos = mix(pos_lo, pos_hi, seg_t);
+        let base_scale = mix(scale_lo, scale_hi, seg_t);
+        let particle_scale = select(0.0, base_scale, is_active);
+
+        // sample thickness curve LUT (index 0 = tail, index N = head)
+        let last_curve_idx = TRAIL_THICKNESS_CURVE_SAMPLES - 1u;
+        let curve_idx_f = (1.0 - section_frac) * f32(last_curve_idx);
+        let curve_lo = min(u32(curve_idx_f), last_curve_idx);
+        let curve_hi = min(curve_lo + 1u, last_curve_idx);
+        let curve_t = curve_idx_f - f32(curve_lo);
+        let thickness = mix(
+            emitter_uniforms.trail_thickness_curve[curve_lo],
+            emitter_uniforms.trail_thickness_curve[curve_hi],
+            curve_t
+        );
+
+        // derive trail direction from adjacent segment positions
+        var trail_dir: vec3<f32>;
+        if (seg_lo != seg_hi) {
+            trail_dir = pos_hi - pos_lo;
+        } else {
+            // at the tail end, use direction from previous segment
+            let prev_pos = sorted_particles[head_slot + max(seg_lo, 1u) - 1u].position.xyz;
+            trail_dir = pos_lo - prev_pos;
+        }
+        let dir_len = length(trail_dir);
+        if (dir_len > 0.001) {
+            trail_dir = trail_dir / dir_len;
+        } else {
+            trail_dir = -normalize(head_particle.velocity.xyz);
+        }
+
+        let orient = align_y_to_direction(trail_dir);
+
+        // scale cross-section by width curve, flatten Y (position from trail_pos)
+        var cross_section = vertex.position;
+        cross_section.x *= thickness;
+        cross_section.z *= thickness;
+        cross_section.y = 0.0;
+
+        let is_local = emitter_uniforms.use_local_coords != 0u;
+
+        if (is_local) {
+            let offset = orient * (cross_section * particle_scale);
+            let local_pos = trail_pos + offset;
+            out.world_position = mesh_functions::mesh_position_local_to_world(
+                world_from_local, vec4(local_pos, 1.0)
+            );
+        } else {
+            let emitter_scale = vec3(
+                length(world_from_local[0].xyz),
+                length(world_from_local[1].xyz),
+                length(world_from_local[2].xyz),
+            );
+            let offset = orient * (cross_section * particle_scale * emitter_scale);
+            out.world_position = vec4(trail_pos + offset, 1.0);
+        }
+
+        out.position = position_world_to_clip(out.world_position.xyz);
+
+#ifdef VERTEX_NORMALS
+        let rotated_normal = orient * vertex.normal;
+        if (is_local) {
+            out.world_normal = mesh_functions::mesh_normal_local_to_world(rotated_normal, vertex.instance_index);
+        } else {
+            out.world_normal = rotated_normal;
+        }
+#endif
+
+#ifdef VERTEX_COLORS
+        out.color = vertex.color * head_particle.color;
+#endif
+
+        return out;
+    }
+
     let particle = sorted_particles[particle_index];
 
     let flags = bitcast<u32>(particle.custom.w);
@@ -79,7 +196,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var rotated_normal = vertex.normal;
 #endif
 
-    let transform_align = (emitter_uniforms.particle_flags >> TRANSFORM_ALIGN_SHIFT) & TRANSFORM_ALIGN_MASK;
+    let transform_align = emitter_uniforms.transform_align;
 
     if transform_align == TRANSFORM_ALIGN_Y_TO_VELOCITY {
         let alignment_dir = particle.alignment_dir.xyz;
@@ -120,8 +237,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 #endif
         }
     }
-
-    var world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
 
     let emitter_scale = vec3(
         length(world_from_local[0].xyz),
@@ -241,29 +356,17 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 #endif
     }
 
-#ifdef VERTEX_UVS_A
-    out.uv = vertex.uv;
-#endif
-
-#ifdef VERTEX_UVS_B
-    out.uv_b = vertex.uv_b;
-#endif
-
-#ifdef VERTEX_TANGENTS
-    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vertex.tangent, vertex.instance_index);
-#endif
-
 #ifdef VERTEX_COLORS
     out.color = vertex.color * particle.color;
-#else
-    // store particle color for fragment shader (requires VERTEX_COLORS)
-#endif
-
-#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
-    out.instance_index = vertex.instance_index;
 #endif
 
     return out;
+}
+
+fn get_head_particle(particle_index: u32) -> Particle {
+    let trail_size = emitter_uniforms.trail_size;
+    let head_slot = particle_index * max(trail_size, 1u);
+    return sorted_particles[head_slot];
 }
 
 // depth-only prepass fragment - discard inactive, no output needed
@@ -275,8 +378,7 @@ fn fragment(
     @builtin(front_facing) is_front: bool,
 ) {
 #ifdef VERTEX_UVS_B
-    let particle_index = u32(round(in.uv_b.x));
-    let particle = sorted_particles[particle_index];
+    let particle = get_head_particle(u32(round(in.uv_b.x)));
 #else
     let particle = sorted_particles[0u];
 #endif
@@ -300,8 +402,7 @@ fn fragment(
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
 #ifdef VERTEX_UVS_B
-    let particle_index = u32(round(in.uv_b.x));
-    let particle = sorted_particles[particle_index];
+    let particle = get_head_particle(u32(round(in.uv_b.x)));
 #else
     let particle = sorted_particles[0u];
 #endif
@@ -330,8 +431,7 @@ fn fragment(
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
 #ifdef VERTEX_UVS_B
-    let particle_index = u32(round(in.uv_b.x));
-    let particle = sorted_particles[particle_index];
+    let particle = get_head_particle(u32(round(in.uv_b.x)));
 #else
     let particle = sorted_particles[0u];
 #endif

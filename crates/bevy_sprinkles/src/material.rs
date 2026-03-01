@@ -14,8 +14,11 @@ use bevy::{
 
 const SHADER_ASSET_PATH: &str = "embedded://bevy_sprinkles/shaders/particle_material.wgsl";
 
+/// Number of samples in the baked trail thickness curve LUT.
+pub const TRAIL_THICKNESS_CURVE_SAMPLES: usize = 16;
+
 /// GPU-side per-emitter uniforms passed to the particle material shader.
-#[derive(Clone, Copy, Default, ShaderType)]
+#[derive(Clone, Copy, ShaderType)]
 pub struct ParticleEmitterUniforms {
     /// World-space transform matrix for the emitter.
     pub emitter_transform: Mat4,
@@ -25,8 +28,27 @@ pub struct ParticleEmitterUniforms {
     pub particle_flags: u32,
     /// Whether particles are simulated in local coordinates (1) or world coordinates (0).
     pub use_local_coords: u32,
-    #[doc(hidden)]
-    pub _pad: u32,
+    /// Trail size: `1` when trails are disabled, `sections` when enabled.
+    pub trail_size: u32,
+    /// Transform alignment mode (`0` = disabled, `1` = billboard, `2` = Y-to-velocity,
+    /// `3` = billboard Y-to-velocity, `4` = billboard fixed-Y).
+    pub transform_align: u32,
+    /// Baked trail thickness curve samples (16 evenly spaced points from head to tail).
+    pub trail_thickness_curve: [f32; TRAIL_THICKNESS_CURVE_SAMPLES],
+}
+
+impl Default for ParticleEmitterUniforms {
+    fn default() -> Self {
+        Self {
+            emitter_transform: Mat4::IDENTITY,
+            max_particles: 0,
+            particle_flags: 0,
+            use_local_coords: 0,
+            trail_size: 1,
+            transform_align: 0,
+            trail_thickness_curve: [1.0; TRAIL_THICKNESS_CURVE_SAMPLES],
+        }
+    }
 }
 
 /// A material extension that binds particle data buffers for GPU particle rendering.
@@ -80,6 +102,9 @@ impl MaterialExtension for ParticleMaterialExtension {
             depth_stencil.depth_write_enabled = !is_transparent;
             depth_stencil.depth_compare = CompareFunction::GreaterEqual;
         }
+
+        // disable backface culling so trail tubes render both sides
+        descriptor.primitive.cull_mode = None;
 
         Ok(())
     }

@@ -9,6 +9,13 @@ use bytemuck::{Pod, Zeroable};
 use crate::asset::{DrawPassMaterial, ParticleMesh, ParticleSystemAsset, ParticlesColliderShape3D};
 use crate::material::ParticleMaterialExtension;
 
+#[derive(Clone, Copy, Default, Pod, Zeroable, ShaderType)]
+#[repr(C)]
+pub(crate) struct TrailHistoryEntry {
+    pub(crate) position: [f32; 4],
+    pub(crate) velocity: [f32; 4],
+}
+
 /// Component that spawns a 2D particle system from a [`ParticleSystemAsset`].
 ///
 /// # TODO
@@ -115,6 +122,8 @@ pub struct SimulationStep {
     pub delta_time: f32,
     /// Whether to clear all particles before this step.
     pub clear_requested: bool,
+    /// Snapshot of the trail history ring buffer write position for this step.
+    pub trail_history_write_index: u32,
 }
 
 /// Runtime state for a single emitter within a particle system.
@@ -144,6 +153,10 @@ pub struct EmitterRuntime {
     pub emitter_index: usize,
     /// Pending simulation steps to be dispatched to the GPU.
     pub simulation_steps: Vec<SimulationStep>,
+    /// Current write position in the per-particle trail history ring buffer.
+    pub trail_history_write_index: u32,
+    /// Ring buffer size per particle for trail history.
+    pub trail_history_frames: u32,
 }
 
 impl EmitterRuntime {
@@ -166,6 +179,8 @@ impl EmitterRuntime {
             clear_requested: false,
             emitter_index,
             simulation_steps: Vec::new(),
+            trail_history_write_index: 0,
+            trail_history_frames: 0,
         }
     }
 
@@ -215,6 +230,14 @@ impl EmitterRuntime {
         self.one_shot_completed = false;
         self.clear_requested = true;
         self.simulation_steps.clear();
+        self.trail_history_write_index = 0;
+    }
+
+    pub(crate) fn advance_trail_history(&mut self) {
+        if self.trail_history_frames > 0 {
+            self.trail_history_write_index =
+                (self.trail_history_write_index + 1) % self.trail_history_frames;
+        }
     }
 
     /// Stops and immediately restarts emission from the beginning.
@@ -291,8 +314,16 @@ pub struct ParticleBufferHandle {
     pub sorted_particles_buffer: Handle<ShaderStorageBuffer>,
     /// Buffer holding per-emitter uniforms (transform, flags) for the material shader.
     pub emitter_uniforms_buffer: Handle<ShaderStorageBuffer>,
-    /// Maximum number of particles this buffer can hold.
+    /// Maximum number of particles this buffer can hold (amount * trail_size).
     pub max_particles: u32,
+    /// The particle count used when allocating buffers.
+    pub amount: u32,
+    /// The trail size used when allocating buffers.
+    pub trail_size: u32,
+    /// Per-particle trail position history ring buffer.
+    pub trail_history_buffer: Option<Handle<ShaderStorageBuffer>>,
+    /// Ring buffer size per particle for trail history.
+    pub trail_history_frames: u32,
 }
 
 /// Raw GPU buffer references for an emitter, used during compute dispatch.

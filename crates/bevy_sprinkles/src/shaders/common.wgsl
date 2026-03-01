@@ -8,12 +8,16 @@ struct Particle {
     alignment_dir: vec4<f32>,  // xyz direction for ALIGN_Y_TO_VELOCITY, w = angle (radians)
 }
 
+const TRAIL_THICKNESS_CURVE_SAMPLES: u32 = 16u;
+
 struct ParticleEmitterUniforms {
     emitter_transform: mat4x4<f32>,
     max_particles: u32,
     particle_flags: u32,
     use_local_coords: u32,
-    _pad: u32,
+    trail_size: u32,
+    transform_align: u32,
+    trail_thickness_curve: array<f32, 16>,
 }
 
 struct CurveUniform {
@@ -30,14 +34,17 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 const EMITTER_FLAG_ROTATE_Y: u32 = 2u;
 const EMITTER_FLAG_DISABLE_Z: u32 = 4u;
 
-// transform align mode (3-bit value stored in bits 3-5 of particle_flags)
-const TRANSFORM_ALIGN_SHIFT: u32 = 3u;
-const TRANSFORM_ALIGN_MASK: u32 = 7u;
+// transform align mode values
 const TRANSFORM_ALIGN_DISABLED: u32 = 0u;
 const TRANSFORM_ALIGN_BILLBOARD: u32 = 1u;
 const TRANSFORM_ALIGN_Y_TO_VELOCITY: u32 = 2u;
 const TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY: u32 = 3u;
 const TRANSFORM_ALIGN_BILLBOARD_FIXED_Y: u32 = 4u;
+
+struct TrailHistoryEntry {
+    position: vec4<f32>,
+    velocity: vec4<f32>,
+}
 
 // sub emitter emission buffer
 struct SubEmissionEntry {

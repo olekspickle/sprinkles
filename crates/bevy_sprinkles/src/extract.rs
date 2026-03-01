@@ -28,6 +28,8 @@ pub const COLLIDER_TYPE_SPHERE: u32 = 0;
 pub const COLLIDER_TYPE_BOX: u32 = 1;
 pub const MAX_COLLIDERS: usize = 32;
 
+const DEFAULT_FPS: f32 = 60.0;
+
 pub const COLLISION_MODE_DISABLED: u32 = 0;
 pub const COLLISION_MODE_RIGID: u32 = 1;
 pub const COLLISION_MODE_HIDE_ON_CONTACT: u32 = 2;
@@ -194,6 +196,16 @@ pub struct EmitterUniforms {
     pub _sub_emitter_pad2: u32,
 
     pub emitter_transform: [[f32; 4]; 4],
+
+    pub trail_size: u32,
+    pub trail_pass: u32,
+    pub trail_stretch_time: f32,
+    pub trail_history_size: u32,
+
+    pub trail_history_write_index: u32,
+    pub trail_effective_fps: f32,
+    pub _trail_pad0: u32,
+    pub _trail_pad1: u32,
 }
 
 #[derive(Resource, Default)]
@@ -228,6 +240,8 @@ pub struct ExtractedEmitterData {
     pub is_sub_emitter_target: bool,
     pub emission_buffer_handle: Option<Handle<ShaderStorageBuffer>>,
     pub source_buffer_handle: Option<Handle<ShaderStorageBuffer>>,
+    pub trail_size: u32,
+    pub trail_history_buffer_handle: Option<Handle<ShaderStorageBuffer>>,
 }
 
 fn curve_uniform_from(curve: &Option<CurveTexture>) -> CurveUniform {
@@ -492,6 +506,16 @@ fn build_base_uniforms(
         _sub_emitter_pad2: 0,
 
         emitter_transform: spawn_transform.to_cols_array_2d(),
+
+        trail_size: 1,
+        trail_pass: 0,
+        trail_stretch_time: 0.0,
+        trail_history_size: 0,
+
+        trail_history_write_index: 0,
+        trail_effective_fps: 60.0,
+        _trail_pad0: 0,
+        _trail_pad1: 0,
     }
 }
 
@@ -608,7 +632,22 @@ pub fn extract_particle_systems(
             (world_matrix, Mat4::IDENTITY)
         };
 
-        let base_uniforms = build_base_uniforms(
+        let trail_size = emitter.trail.trail_size();
+        let trail_stretch_time = emitter.trail.stretch_time;
+
+        let effective_fps = if emitter.time.fixed_fps > 0 {
+            emitter.time.fixed_fps as f32
+        } else {
+            let dt = runtime
+                .simulation_steps
+                .last()
+                .map(|s| s.delta_time)
+                .unwrap_or(1.0 / DEFAULT_FPS);
+            if dt > 0.0 { 1.0 / dt } else { DEFAULT_FPS }
+        };
+        let trail_history_frames = buffer_handle.trail_history_frames;
+
+        let mut base_uniforms = build_base_uniforms(
             emitter,
             runtime,
             draw_order,
@@ -617,6 +656,10 @@ pub fn extract_particle_systems(
             sub_emitter_uniforms,
             spawn_transform,
         );
+        base_uniforms.trail_size = trail_size;
+        base_uniforms.trail_stretch_time = trail_stretch_time;
+        base_uniforms.trail_history_size = trail_history_frames;
+        base_uniforms.trail_effective_fps = effective_fps;
 
         let is_sub_emitter_target = emission_buffer_map
             .contains_key(&(emitter_entity.parent_system, runtime.emitter_index));
@@ -624,13 +667,13 @@ pub fn extract_particle_systems(
         let uniform_steps: Vec<EmitterUniforms> = runtime
             .simulation_steps
             .iter()
-            .map(|step| {
+            .flat_map(|step| {
                 let should_emit = if is_sub_emitter_target {
                     false
                 } else {
                     runtime.emitting && is_past_delay(step.system_time, &emitter.time)
                 };
-                EmitterUniforms {
+                let head_uniforms = EmitterUniforms {
                     delta_time: step.delta_time,
                     system_phase: compute_phase(step.system_time, &emitter.time),
                     prev_system_phase: compute_phase(step.prev_system_time, &emitter.time),
@@ -638,8 +681,15 @@ pub fn extract_particle_systems(
                     emitting: if should_emit { 1 } else { 0 },
                     clear_particles: if step.clear_requested { 1 } else { 0 },
                     is_sub_emitter_target: if is_sub_emitter_target { 1 } else { 0 },
+                    trail_pass: 0,
+                    trail_history_write_index: step.trail_history_write_index,
                     ..base_uniforms
-                }
+                };
+                let trail_uniforms = (trail_size > 1).then(|| EmitterUniforms {
+                    trail_pass: 1,
+                    ..head_uniforms
+                });
+                std::iter::once(head_uniforms).chain(trail_uniforms)
             })
             .collect();
 
@@ -703,6 +753,8 @@ pub fn extract_particle_systems(
                 is_sub_emitter_target,
                 emission_buffer_handle,
                 source_buffer_handle,
+                trail_size,
+                trail_history_buffer_handle: buffer_handle.trail_history_buffer.clone(),
             },
         ));
     }

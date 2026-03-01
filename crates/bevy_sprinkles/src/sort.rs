@@ -35,6 +35,10 @@ pub struct SortParams {
     pub camera_forward: Vec3,
     pub _pad2: f32,
     pub emitter_transform: Mat4,
+    pub trail_size: u32,
+    pub _trail_pad0: u32,
+    pub _trail_pad1: u32,
+    pub _trail_pad2: u32,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
@@ -132,7 +136,11 @@ pub fn prepare_particle_sort_bind_groups(
         };
 
         let emitter_idx = emitter_buffers.len();
-        let workgroups = (emitter_data.amount + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+        let trail_size = emitter_data.trail_size;
+        let total_slots = emitter_data.amount * trail_size;
+        let group_count = emitter_data.amount;
+        let group_workgroups = (group_count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+        let total_workgroups = (total_slots + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
 
         emitter_buffers.push((
             particle_buf.buffer.clone(),
@@ -141,7 +149,7 @@ pub fn prepare_particle_sort_bind_groups(
         ));
 
         let base_params = SortParams {
-            amount: emitter_data.amount,
+            amount: total_slots,
             draw_order: emitter_data.draw_order,
             stage: 0,
             step: 0,
@@ -150,17 +158,21 @@ pub fn prepare_particle_sort_bind_groups(
             camera_forward: Vec3::from_array(emitter_data.camera_forward),
             _pad2: 0.0,
             emitter_transform: emitter_data.emitter_transform,
+            trail_size,
+            _trail_pad0: 0,
+            _trail_pad1: 0,
+            _trail_pad2: 0,
         };
 
         let init_offset = dynamic_uniform.push(&base_params);
         result.init_dispatches.push(SortDispatch {
             emitter_index: emitter_idx,
             dynamic_offset: init_offset,
-            workgroups,
+            workgroups: group_workgroups,
         });
 
         if emitter_data.draw_order != 0 {
-            let n = emitter_data.amount.next_power_of_two();
+            let n = group_count.next_power_of_two();
             let num_stages = (n as f32).log2().ceil() as u32;
 
             let mut level = 0usize;
@@ -179,7 +191,7 @@ pub fn prepare_particle_sort_bind_groups(
                     result.sort_levels[level].push(SortDispatch {
                         emitter_index: emitter_idx,
                         dynamic_offset: offset,
-                        workgroups,
+                        workgroups: group_workgroups,
                     });
 
                     level += 1;
@@ -191,7 +203,7 @@ pub fn prepare_particle_sort_bind_groups(
         result.copy_dispatches.push(SortDispatch {
             emitter_index: emitter_idx,
             dynamic_offset: copy_offset,
-            workgroups,
+            workgroups: total_workgroups,
         });
     }
 

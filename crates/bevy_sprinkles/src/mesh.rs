@@ -6,7 +6,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::asset::{ParticleMesh, QuadOrientation};
+use crate::asset::{ParticleMesh, QuadOrientation, RibbonTrailShape};
 
 /// Cache for instanced particle meshes, keyed by mesh configuration and particle count.
 #[derive(Resource, Default)]
@@ -406,6 +406,170 @@ fn create_subdivided_quad(size: Vec2, subdivisions_x: u32, subdivisions_y: u32) 
     mesh
 }
 
+fn create_tube_trail_mesh(
+    radius: f32,
+    radial_steps: u32,
+    sections: u32,
+    section_length: f32,
+    section_rings: u32,
+) -> Mesh {
+    let radial_steps = radial_steps.max(3);
+    let sections = sections.max(2);
+    let total_rings = sections * section_rings.max(1);
+    let total_length = sections as f32 * section_length;
+
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut normals: Vec<[f32; 3]> = Vec::new();
+    let mut uvs: Vec<[f32; 2]> = Vec::new();
+    let mut uv_bs: Vec<[f32; 2]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+
+    for ring in 0..=total_rings {
+        let section_frac = ring as f32 / total_rings as f32;
+        let y = -section_frac * total_length;
+
+        for segment in 0..=radial_steps {
+            let u = segment as f32 / radial_steps as f32;
+            let theta = u * std::f32::consts::TAU;
+            let (sin_theta, cos_theta) = theta.sin_cos();
+
+            positions.push([cos_theta * radius, y, sin_theta * radius]);
+            normals.push([cos_theta, 0.0, sin_theta]);
+            uvs.push([u, section_frac]);
+            uv_bs.push([0.0, section_frac]);
+        }
+    }
+
+    let verts_per_ring = radial_steps + 1;
+    for ring in 0..total_rings {
+        for segment in 0..radial_steps {
+            let top_left = ring * verts_per_ring + segment;
+            let top_right = ring * verts_per_ring + segment + 1;
+            let bottom_left = (ring + 1) * verts_per_ring + segment;
+            let bottom_right = (ring + 1) * verts_per_ring + segment + 1;
+
+            indices.push(top_left);
+            indices.push(top_right);
+            indices.push(bottom_left);
+
+            indices.push(top_right);
+            indices.push(bottom_right);
+            indices.push(bottom_left);
+        }
+    }
+
+    let cap_center = positions.len() as u32;
+    positions.push([0.0, 0.0, 0.0]);
+    normals.push([0.0, -1.0, 0.0]);
+    uvs.push([0.5, 0.5]);
+    uv_bs.push([0.0, 0.0]);
+
+    for segment in 0..=radial_steps {
+        let u = segment as f32 / radial_steps as f32;
+        let theta = u * std::f32::consts::TAU;
+        let (sin_theta, cos_theta) = theta.sin_cos();
+
+        positions.push([cos_theta * radius, 0.0, sin_theta * radius]);
+        normals.push([0.0, -1.0, 0.0]);
+        uvs.push([cos_theta * 0.5 + 0.5, sin_theta * 0.5 + 0.5]);
+        uv_bs.push([0.0, 0.0]);
+    }
+
+    for segment in 0..radial_steps {
+        let first = cap_center + 1 + segment;
+        let second = cap_center + 2 + segment;
+        indices.push(cap_center);
+        indices.push(first);
+        indices.push(second);
+    }
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, uv_bs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
+fn create_ribbon_trail_mesh(
+    size: f32,
+    sections: u32,
+    section_length: f32,
+    section_segments: u32,
+    section_rings: u32,
+    shape: RibbonTrailShape,
+) -> Mesh {
+    let sections = sections.max(2);
+    let total_subdivs = sections * section_segments.max(1) * section_rings.max(1);
+    let total_length = sections as f32 * section_length;
+
+    let strip_offsets: Vec<[f32; 2]> = match shape {
+        RibbonTrailShape::Flat => vec![[1.0, 0.0]],
+        RibbonTrailShape::Cross => vec![[1.0, 0.0], [0.0, 1.0]],
+    };
+
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut normals: Vec<[f32; 3]> = Vec::new();
+    let mut uvs: Vec<[f32; 2]> = Vec::new();
+    let mut uv_bs: Vec<[f32; 2]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+
+    for offsets in &strip_offsets {
+        let base_vertex = positions.len() as u32;
+
+        let normal = if offsets[0] != 0.0 {
+            [0.0, 0.0, 1.0]
+        } else {
+            [1.0, 0.0, 0.0]
+        };
+
+        for row in 0..=total_subdivs {
+            let section_frac = row as f32 / total_subdivs as f32;
+            let y = -section_frac * total_length;
+
+            positions.push([-size * offsets[0], y, -size * offsets[1]]);
+            normals.push(normal);
+            uvs.push([0.0, section_frac]);
+            uv_bs.push([0.0, section_frac]);
+
+            positions.push([size * offsets[0], y, size * offsets[1]]);
+            normals.push(normal);
+            uvs.push([1.0, section_frac]);
+            uv_bs.push([0.0, section_frac]);
+        }
+
+        for row in 0..total_subdivs {
+            let left = base_vertex + row * 2;
+            let right = left + 1;
+            let next_left = left + 2;
+            let next_right = left + 3;
+
+            indices.push(left);
+            indices.push(right);
+            indices.push(next_left);
+
+            indices.push(right);
+            indices.push(next_right);
+            indices.push(next_left);
+        }
+    }
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, uv_bs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
 fn create_base_mesh(config: &ParticleMesh) -> Mesh {
     match config {
         ParticleMesh::Quad {
@@ -476,6 +640,34 @@ fn create_base_mesh(config: &ParticleMesh) -> Mesh {
             size,
             subdivide,
         } => create_prism_mesh(*left_to_right, *size, *subdivide),
+        ParticleMesh::TubeTrail {
+            radius,
+            radial_steps,
+            sections,
+            section_length,
+            section_rings,
+        } => create_tube_trail_mesh(
+            *radius,
+            *radial_steps,
+            *sections,
+            *section_length,
+            *section_rings,
+        ),
+        ParticleMesh::RibbonTrail {
+            size,
+            sections,
+            section_length,
+            section_segments,
+            section_rings,
+            shape,
+        } => create_ribbon_trail_mesh(
+            *size,
+            *sections,
+            *section_length,
+            *section_segments,
+            *section_rings,
+            *shape,
+        ),
     }
 }
 
@@ -485,6 +677,7 @@ fn build_particle_mesh(
     meshes: &mut Assets<Mesh>,
 ) -> Handle<Mesh> {
     let base_mesh = create_base_mesh(config);
+    let trail = config.is_trail();
 
     let base_positions: Vec<[f32; 3]> =
         extract_float32x3(&base_mesh, Mesh::ATTRIBUTE_POSITION).unwrap_or_default();
@@ -499,6 +692,17 @@ fn build_particle_mesh(
             _ => None,
         })
         .unwrap_or_else(|| vec![[0.0, 0.0]; base_positions.len()]);
+
+    let base_uv_bs: Option<Vec<[f32; 2]>> = if trail {
+        base_mesh
+            .attribute(Mesh::ATTRIBUTE_UV_1)
+            .and_then(|attr| match attr {
+                VertexAttributeValues::Float32x2(v) => Some(v.clone()),
+                _ => None,
+            })
+    } else {
+        None
+    };
 
     let base_indices: Vec<u32> = base_mesh
         .indices()
@@ -525,7 +729,8 @@ fn build_particle_mesh(
             positions.push(base_positions[i]);
             normals.push(base_normals[i]);
             uvs.push(base_uvs[i]);
-            uv_bs.push([particle_index_f32, 0.0]);
+            let trail_v = base_uv_bs.as_ref().map_or(0.0, |b| b[i][1]);
+            uv_bs.push([particle_index_f32, trail_v]);
         }
 
         for &idx in &base_indices {

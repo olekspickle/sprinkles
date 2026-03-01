@@ -3,6 +3,7 @@ use bevy_sprinkles::prelude::*;
 
 use crate::state::EditorState;
 use crate::ui::components::binding::{FieldBinding, get_inspecting_emitter};
+use crate::ui::widgets::alert::{AlertSpan, AlertVariant, alert};
 use crate::ui::widgets::combobox::ComboBoxOptionData;
 use crate::ui::widgets::inspector_field::InspectorFieldProps;
 use crate::ui::widgets::text_edit::{TextEditProps, text_edit};
@@ -22,53 +23,62 @@ use crate::ui::icons::{
 #[derive(Component)]
 struct MaskCutoffRow;
 
+#[derive(Component)]
+pub struct TrailMeshAlert;
+
+#[derive(Component)]
+struct DrawPassSection;
+
 pub fn plugin(app: &mut App) {
     app.add_systems(
         Update,
-        sync_mask_cutoff.after(super::update_inspected_emitter_tracker),
+        (sync_mask_cutoff, sync_trail_mesh_alert).after(super::update_inspected_emitter_tracker),
     );
 }
 
 pub fn draw_pass_section(asset_server: &AssetServer) -> impl Bundle {
-    inspector_section(
-        InspectorSection::new(
-            "Draw pass",
-            vec![
+    (
+        DrawPassSection,
+        inspector_section(
+            InspectorSection::new(
+                "Draw pass",
                 vec![
-                    InspectorItem::Variant {
-                        path: "draw_pass.mesh".into(),
-                        props: VariantEditProps::new("draw_pass.mesh")
-                            .with_variants(mesh_variants()),
-                    },
-                    InspectorItem::Variant {
-                        path: "draw_pass.material".into(),
-                        props: VariantEditProps::new("draw_pass.material")
-                            .with_variants(material_variants()),
-                    },
+                    vec![
+                        InspectorItem::Variant {
+                            path: "draw_pass.mesh".into(),
+                            props: VariantEditProps::new("draw_pass.mesh")
+                                .with_variants(mesh_variants()),
+                        },
+                        InspectorItem::Variant {
+                            path: "draw_pass.material".into(),
+                            props: VariantEditProps::new("draw_pass.material")
+                                .with_variants(material_variants()),
+                        },
+                    ],
+                    vec![
+                        InspectorFieldProps::new("draw_pass.draw_order")
+                            .combobox(combobox_options_from_reflect::<DrawOrder>())
+                            .into(),
+                    ],
+                    vec![
+                        InspectorFieldProps::new("draw_pass.transform_align")
+                            .optional_combobox(transform_align_options())
+                            .into(),
+                    ],
+                    vec![
+                        InspectorFieldProps::new("draw_pass.shadow_caster")
+                            .bool()
+                            .into(),
+                    ],
+                    vec![
+                        InspectorFieldProps::new("draw_pass.use_local_coords")
+                            .bool()
+                            .into(),
+                    ],
                 ],
-                vec![
-                    InspectorFieldProps::new("draw_pass.draw_order")
-                        .combobox(combobox_options_from_reflect::<DrawOrder>())
-                        .into(),
-                ],
-                vec![
-                    InspectorFieldProps::new("draw_pass.transform_align")
-                        .optional_combobox(transform_align_options())
-                        .into(),
-                ],
-                vec![
-                    InspectorFieldProps::new("draw_pass.shadow_caster")
-                        .bool()
-                        .into(),
-                ],
-                vec![
-                    InspectorFieldProps::new("draw_pass.use_local_coords")
-                        .bool()
-                        .into(),
-                ],
-            ],
+            ),
+            asset_server,
         ),
-        asset_server,
     )
 }
 
@@ -146,6 +156,43 @@ fn mesh_variants() -> Vec<VariantDefinition> {
                     left_to_right: 0.5,
                     size: Vec3::splat(1.0),
                     subdivide: Vec3::ZERO,
+                }),
+        ),
+        (
+            "TubeTrail",
+            VariantConfig::default()
+                .icon(ICON_MESH_CYLINDER)
+                .override_rows(vec![
+                    vec!["radius", "radial_steps"],
+                    vec!["sections", "section_length"],
+                    vec!["section_rings"],
+                ])
+                .default_value(ParticleMesh::TubeTrail {
+                    radius: 0.5,
+                    radial_steps: 8,
+                    sections: 8,
+                    section_length: 0.2,
+                    section_rings: 1,
+                }),
+        ),
+        (
+            "RibbonTrail",
+            VariantConfig::default()
+                .icon(ICON_MESH_PLANE)
+                .override_combobox::<RibbonTrailShape>("shape")
+                .override_rows(vec![
+                    vec!["size"],
+                    vec!["sections", "section_length"],
+                    vec!["section_segments", "section_rings"],
+                    vec!["shape"],
+                ])
+                .default_value(ParticleMesh::RibbonTrail {
+                    size: 1.0,
+                    sections: 8,
+                    section_length: 0.2,
+                    section_segments: 3,
+                    section_rings: 1,
+                    shape: RibbonTrailShape::default(),
                 }),
         ),
     ])
@@ -345,5 +392,55 @@ fn sync_mask_cutoff(
             }
         }
         _ => {}
+    }
+}
+
+fn sync_trail_mesh_alert(
+    mut commands: Commands,
+    editor_state: Res<EditorState>,
+    assets: Res<Assets<ParticleSystemAsset>>,
+    sections: Query<(Entity, &InspectorSection, &Children), With<DrawPassSection>>,
+    existing: Query<Entity, With<TrailMeshAlert>>,
+    mut alert_nodes: Query<&mut Node, With<TrailMeshAlert>>,
+    new_alerts: Query<Entity, Added<TrailMeshAlert>>,
+) {
+    if existing.is_empty() {
+        if let Ok((section_entity, _, children)) = sections.single() {
+            if children.len() > 1 {
+                let alert_entity = commands
+                    .spawn((
+                        TrailMeshAlert,
+                        Node {
+                            width: Val::Percent(100.0),
+                            display: Display::None,
+                            ..default()
+                        },
+                    ))
+                    .with_child(alert(
+                        AlertVariant::Warning,
+                        vec![
+                            AlertSpan::Text("You need to enable ".into()),
+                            AlertSpan::Bold("Trail".into()),
+                            AlertSpan::Text(" to use this mesh correctly.".into()),
+                        ],
+                    ))
+                    .id();
+                commands
+                    .entity(section_entity)
+                    .insert_children(2, &[alert_entity]);
+            }
+        }
+    }
+
+    if !editor_state.is_changed() && !assets.is_changed() && new_alerts.is_empty() {
+        return;
+    }
+
+    let should_show = get_inspecting_emitter(&editor_state, &assets)
+        .map(|(_, e)| e.draw_pass.mesh.is_trail() && !e.trail.enabled)
+        .unwrap_or(false);
+
+    for mut node in &mut alert_nodes {
+        super::set_display_visible(&mut node, should_show);
     }
 }

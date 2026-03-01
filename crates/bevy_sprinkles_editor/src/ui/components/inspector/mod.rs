@@ -11,6 +11,7 @@ mod scale;
 mod settings_properties;
 mod sub_emitter;
 mod time;
+mod trail;
 mod transform;
 mod turbulence;
 pub mod types;
@@ -52,6 +53,7 @@ pub fn plugin(app: &mut App) {
             velocities::plugin,
             accelerations::plugin,
             turbulence::plugin,
+            trail::plugin,
             collision::plugin,
             sub_emitter::plugin,
             particle_flags::plugin,
@@ -202,6 +204,7 @@ fn setup_inspector_panel(
                                     .spawn(accelerations::accelerations_section(&asset_server));
                                 emitter_content
                                     .spawn(turbulence::turbulence_section(&asset_server));
+                                emitter_content.spawn(trail::trail_section(&asset_server));
                                 emitter_content.spawn(collision::collision_section(&asset_server));
                                 emitter_content
                                     .spawn(sub_emitter::sub_emitter_section(&asset_server));
@@ -301,6 +304,17 @@ fn toggle_inspector_content(
         if node.display != display {
             node.display = display;
         }
+    }
+}
+
+pub(crate) fn set_display_visible(node: &mut Node, visible: bool) {
+    let display = if visible {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    if node.display != display {
+        node.display = display;
     }
 }
 

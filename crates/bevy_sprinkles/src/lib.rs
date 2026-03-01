@@ -189,8 +189,8 @@ use mesh::ParticleMeshCache;
 use runtime::check_particle_system_finished;
 use sort::ParticleSortPlugin;
 use spawning::{
-    cleanup_particle_entities, setup_particle_systems, sync_collider_data, sync_particle_material,
-    sync_particle_mesh, update_particle_time, write_emitter_uniforms,
+    cleanup_particle_entities, setup_particle_systems, sync_collider_data, sync_particle_buffers,
+    sync_particle_material, sync_particle_mesh, update_particle_time, write_emitter_uniforms,
 };
 use textures::{
     CurveTextureCache, FallbackCurveTexture, FallbackGradientTexture, GradientTextureCache,
@@ -233,7 +233,8 @@ impl Plugin for SprinklesPlugin {
             Update,
             (
                 setup_particle_systems,
-                sync_particle_mesh,
+                sync_particle_buffers.after(setup_particle_systems),
+                sync_particle_mesh.after(sync_particle_buffers),
                 sync_particle_material,
                 sync_collider_data,
                 update_particle_time,
@@ -263,9 +264,9 @@ impl Plugin for SprinklesPlugin {
 pub use asset::{
     ColliderData, DrawOrder, DrawPassMaterial, EmitterAccelerations, EmitterCollision,
     EmitterCollisionMode, EmitterColors, EmitterData, EmitterDrawPass, EmitterEmission,
-    EmitterScale, EmitterTime, EmitterTurbulence, EmitterVelocities, ParticleFlags, ParticleMesh,
-    ParticleSystemDimension, ParticlesColliderShape3D, QuadOrientation, SerializableAlphaMode,
-    StandardParticleMaterial, TransformAlign,
+    EmitterScale, EmitterTime, EmitterTrail, EmitterTurbulence, EmitterVelocities, ParticleFlags,
+    ParticleMesh, ParticleSystemDimension, ParticlesColliderShape3D, QuadOrientation,
+    RibbonTrailShape, SerializableAlphaMode, StandardParticleMaterial, TransformAlign,
 };
 pub use material::ParticleMaterialExtension;
 pub use runtime::{

@@ -15,6 +15,10 @@ struct SortParams {
     camera_forward: vec3<f32>,
     _pad2: f32,
     emitter_transform: mat4x4<f32>,
+    trail_size: u32,
+    _trail_pad0: u32,
+    _trail_pad1: u32,
+    _trail_pad2: u32,
 }
 
 @group(0) @binding(0) var<uniform> params: SortParams;
@@ -24,7 +28,13 @@ struct SortParams {
 @group(0) @binding(3) var<storage, read_write> sorted_particles: array<Particle>;
 
 fn get_sort_key(particle_index: u32) -> f32 {
-    let particle = particles[particle_index];
+    // for trail segments, use the head particle's sort key
+    var head_index = particle_index;
+    if (params.trail_size > 1u) {
+        head_index = (particle_index / params.trail_size) * params.trail_size;
+    }
+
+    let particle = particles[head_index];
     let flags = bitcast<u32>(particle.custom.w);
     let is_active = (flags & PARTICLE_FLAG_ACTIVE) != 0u;
 
@@ -36,7 +46,7 @@ fn get_sort_key(particle_index: u32) -> f32 {
     switch (params.draw_order) {
         case DRAW_ORDER_INDEX: {
             // emission order (lowest index first, highest last = front)
-            return f32(particle_index);
+            return f32(head_index);
         }
         case DRAW_ORDER_LIFETIME: {
             // highest remaining lifetime drawn at front
@@ -62,37 +72,34 @@ fn get_sort_key(particle_index: u32) -> f32 {
             return -depth;
         }
         default: {
-            return f32(particle_index);
+            return f32(head_index);
         }
     }
 }
 
 // bitonic sort: compare and swap based on current stage and step
+// when trail_size > 1, sort operates on trail groups (indices store head slot indices)
 @compute @workgroup_size(256)
 fn sort(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let ts = params.trail_size;
+    let group_count = params.amount / max(ts, 1u);
     let idx = global_id.x;
-    if (idx >= params.amount) {
+    if (idx >= group_count) {
         return;
     }
 
-    // distance between elements to compare in this step
     let d = 1u << params.step;
-
-    // each pair of 2d elements: process only the first d (lower half)
     let block_2d = 2u * d;
     let within_block = idx % block_2d;
     if (within_block >= d) {
-        // we're in the upper half of this comparison block, skip
         return;
     }
 
     let partner = idx + d;
-    if (partner >= params.amount) {
+    if (partner >= group_count) {
         return;
     }
 
-    // determine sort direction based on which stage block we're in
-    // stage_block_size = 2^(stage+1)
     let stage_block_size = 2u << params.stage;
     let stage_block_idx = idx / stage_block_size;
     let ascending = (stage_block_idx % 2u) == 0u;
@@ -103,8 +110,6 @@ fn sort(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let key_a = get_sort_key(idx_a);
     let key_b = get_sort_key(idx_b);
 
-    // for ascending blocks: we want smaller keys at lower indices
-    // for descending blocks: we want larger keys at lower indices
     var should_swap = false;
     if (ascending) {
         should_swap = key_a > key_b;
@@ -118,17 +123,19 @@ fn sort(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 }
 
-// initialize indices to identity mapping
+// initialize indices: one entry per trail group, storing the head slot index
 @compute @workgroup_size(256)
 fn init_indices(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx = global_id.x;
-    if (idx >= params.amount) {
+    let ts = params.trail_size;
+    let group_count = params.amount / max(ts, 1u);
+    if (idx >= group_count) {
         return;
     }
-    indices[idx] = idx;
+    indices[idx] = idx * ts;
 }
 
-// copy particle data to sorted output buffer (instance 0 = back-most, instance N = front-most)
+// copy particle data to sorted output buffer, expanding trail groups
 @compute @workgroup_size(256)
 fn copy_sorted(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx = global_id.x;
@@ -136,7 +143,15 @@ fn copy_sorted(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    // indices[idx] contains the original particle index for sorted position idx
-    let particle_index = indices[idx];
-    sorted_particles[idx] = particles[particle_index];
+    let ts = params.trail_size;
+    if (ts <= 1u) {
+        let particle_index = indices[idx];
+        sorted_particles[idx] = particles[particle_index];
+    } else {
+        // map output slot to group and segment within group
+        let group_idx = idx / ts;
+        let within_group = idx % ts;
+        let src_head = indices[group_idx];
+        sorted_particles[idx] = particles[src_head + within_group];
+    }
 }

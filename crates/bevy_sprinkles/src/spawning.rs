@@ -3,19 +3,46 @@ use bevy::{
 };
 
 use crate::{
-    asset::{DrawPassMaterial, EmitterData, ParticleSystemAsset},
-    material::{ParticleEmitterUniforms, ParticleMaterialExtension},
+    asset::{DrawPassMaterial, EmitterData, EmitterTrail, ParticleSystemAsset},
+    material::{ParticleEmitterUniforms, ParticleMaterialExtension, TRAIL_THICKNESS_CURVE_SAMPLES},
     mesh::ParticleMeshCache,
     runtime::{
         ColliderEntity, CurrentMaterialConfig, CurrentMeshConfig, EmitterEntity, EmitterRuntime,
         ParticleBufferHandle, ParticleData, ParticleMaterial, ParticleMaterialHandle,
         ParticleMeshHandle, ParticleSystem3D, ParticleSystemRuntime, ParticlesCollider3D,
-        SimulationStep, SubEmitterBufferHandle,
+        SimulationStep, SubEmitterBufferHandle, TrailHistoryEntry,
     },
 };
 
 const MAX_FRAME_DELTA: f32 = 0.1;
 const INACTIVE_GRACE_FACTOR: f32 = 1.2;
+const MAX_TRAIL_HISTORY_FPS: f32 = 240.0;
+fn create_trail_history_buffer(
+    amount: u32,
+    frames: u32,
+    buffers: &mut Assets<ShaderStorageBuffer>,
+) -> Option<Handle<ShaderStorageBuffer>> {
+    if frames > 0 {
+        let data = vec![TrailHistoryEntry::default(); (amount * frames) as usize];
+        Some(buffers.add(ShaderStorageBuffer::from(data)))
+    } else {
+        None
+    }
+}
+
+fn compute_trail_history_frames(emitter: &EmitterData) -> u32 {
+    let trail_size = emitter.trail.trail_size();
+    if trail_size <= 1 {
+        return 0;
+    }
+    let effective_fps = if emitter.time.fixed_fps > 0 {
+        emitter.time.fixed_fps as f32
+    } else {
+        MAX_TRAIL_HISTORY_FPS
+    };
+    let from_stretch = (emitter.trail.stretch_time * effective_fps).ceil() as u32;
+    trail_size.max(from_stretch).max(2)
+}
 
 fn get_particle_asset<'a>(
     parent_system: Entity,
@@ -68,6 +95,7 @@ pub fn update_particle_time(
                     cycle: runtime.cycle,
                     delta_time: 0.0,
                     clear_requested: true,
+                    trail_history_write_index: runtime.trail_history_write_index,
                 };
                 runtime.simulation_steps.push(step);
             }
@@ -105,7 +133,9 @@ pub fn update_particle_time(
                     } else {
                         false
                     },
+                    trail_history_write_index: runtime.trail_history_write_index,
                 };
+                runtime.advance_trail_history();
                 runtime.simulation_steps.push(step);
             }
 
@@ -129,7 +159,9 @@ pub fn update_particle_time(
                 cycle: runtime.cycle,
                 delta_time: delta,
                 clear_requested,
+                trail_history_write_index: runtime.trail_history_write_index,
             };
+            runtime.advance_trail_history();
             runtime.simulation_steps.push(step);
         }
 
@@ -150,18 +182,15 @@ pub fn update_particle_time(
     }
 }
 
-fn combined_particle_flags(emitter: &EmitterData) -> u32 {
+fn transform_align_to_u32(align: Option<crate::asset::TransformAlign>) -> u32 {
     use crate::asset::TransformAlign;
-    let mut flags = emitter.particle_flags.bits();
-    let transform_align_bits = match emitter.draw_pass.transform_align {
-        None => 0u32,
+    match align {
+        None => 0,
         Some(TransformAlign::Billboard) => 1,
         Some(TransformAlign::YToVelocity) => 2,
         Some(TransformAlign::BillboardYToVelocity) => 3,
         Some(TransformAlign::BillboardFixedY) => 4,
-    };
-    flags |= transform_align_bits << 3;
-    flags
+    }
 }
 
 fn create_particle_material_from_config(
@@ -184,6 +213,17 @@ fn create_particle_material_from_config(
             emitter_uniforms: emitter_uniforms_buffer,
         },
     }
+}
+
+fn bake_thickness_curve(trail: &EmitterTrail) -> [f32; TRAIL_THICKNESS_CURVE_SAMPLES] {
+    let mut samples = [1.0f32; TRAIL_THICKNESS_CURVE_SAMPLES];
+    if let Some(ref curve) = trail.thickness_curve {
+        for (i, sample) in samples.iter_mut().enumerate() {
+            let t = i as f32 / (TRAIL_THICKNESS_CURVE_SAMPLES - 1) as f32;
+            *sample = curve.sample(t);
+        }
+    }
+    samples
 }
 
 pub fn setup_particle_systems(
@@ -217,21 +257,29 @@ pub fn setup_particle_systems(
 
         for (emitter_index, emitter) in asset.emitters.iter().enumerate() {
             let amount = emitter.emission.particles_amount;
+            let trail_size = emitter.trail.trail_size();
+            let total_slots = amount * trail_size;
 
             let particles: Vec<ParticleData> =
-                (0..amount).map(|_| ParticleData::default()).collect();
+                (0..total_slots).map(|_| ParticleData::default()).collect();
 
             let particle_buffer_handle = buffers.add(ShaderStorageBuffer::from(particles.clone()));
 
-            let indices: Vec<u32> = (0..amount).collect();
+            let indices: Vec<u32> = (0..total_slots).collect();
             let indices_buffer_handle = buffers.add(ShaderStorageBuffer::from(indices));
 
             let sorted_particles_buffer_handle = buffers.add(ShaderStorageBuffer::from(particles));
 
+            let trail_history_frames = compute_trail_history_frames(emitter);
+            let trail_history_buffer =
+                create_trail_history_buffer(amount, trail_history_frames, &mut buffers);
+
             let emitter_uniforms = ParticleEmitterUniforms {
                 emitter_transform: Mat4::IDENTITY,
-                max_particles: amount,
-                particle_flags: combined_particle_flags(emitter),
+                max_particles: total_slots,
+                particle_flags: emitter.particle_flags.bits(),
+                trail_size,
+                transform_align: transform_align_to_u32(emitter.draw_pass.transform_align),
                 ..default()
             };
             let mut emitter_uniforms_ssbo = ShaderStorageBuffer::default();
@@ -251,17 +299,24 @@ pub fn setup_particle_systems(
                 &asset_server,
             ));
 
+            let mut runtime = EmitterRuntime::new(emitter_index, emitter.time.fixed_seed);
+            runtime.trail_history_frames = trail_history_frames;
+
             let mut emitter_cmds = commands.spawn((
                 EmitterEntity {
                     parent_system: system_entity,
                 },
-                EmitterRuntime::new(emitter_index, emitter.time.fixed_seed),
+                runtime,
                 ParticleBufferHandle {
                     particle_buffer: particle_buffer_handle.clone(),
                     indices_buffer: indices_buffer_handle.clone(),
                     sorted_particles_buffer: sorted_particles_buffer_handle.clone(),
                     emitter_uniforms_buffer: emitter_uniforms_buffer_handle,
-                    max_particles: amount,
+                    max_particles: total_slots,
+                    amount,
+                    trail_size,
+                    trail_history_buffer,
+                    trail_history_frames,
                 },
                 Mesh3d(particle_mesh_handle.clone()),
                 MeshMaterial3d(material_handle.clone()),
@@ -409,11 +464,117 @@ pub fn sync_particle_mesh(
 
         if current_config.0 != new_mesh {
             let new_mesh_handle =
-                mesh_cache.get_or_create(&new_mesh, buffer_handle.max_particles, &mut meshes);
+                mesh_cache.get_or_create(&new_mesh, buffer_handle.amount, &mut meshes);
             mesh3d.0 = new_mesh_handle.clone();
             current_config.0 = new_mesh;
             mesh_handle.0 = new_mesh_handle;
         }
+    }
+}
+
+pub(crate) fn sync_particle_buffers(
+    particle_systems: Query<&ParticleSystem3D>,
+    mut emitter_query: Query<(
+        &EmitterEntity,
+        &mut EmitterRuntime,
+        &mut ParticleBufferHandle,
+        &mut ParticleMeshHandle,
+        &mut Mesh3d,
+        &mut CurrentMeshConfig,
+        &mut ParticleMaterialHandle,
+        &mut MeshMaterial3d<ParticleMaterial>,
+        &mut CurrentMaterialConfig,
+    )>,
+    assets: Res<Assets<ParticleSystemAsset>>,
+    asset_server: Res<AssetServer>,
+    mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut mesh_cache: ResMut<ParticleMeshCache>,
+    mut materials: ResMut<Assets<ParticleMaterial>>,
+) {
+    for (
+        emitter,
+        mut runtime,
+        mut buffer_handle,
+        mut mesh_handle,
+        mut mesh3d,
+        mut current_config,
+        mut material_handle,
+        mut material3d,
+        mut current_material_config,
+    ) in emitter_query.iter_mut()
+    {
+        let Some(emitter_data) = get_emitter_data(
+            emitter.parent_system,
+            runtime.emitter_index,
+            &particle_systems,
+            &assets,
+        ) else {
+            continue;
+        };
+
+        let new_amount = emitter_data.emission.particles_amount;
+        let new_trail_size = emitter_data.trail.trail_size();
+        let new_trail_history_frames = compute_trail_history_frames(emitter_data);
+
+        if buffer_handle.amount == new_amount
+            && buffer_handle.trail_size == new_trail_size
+            && buffer_handle.trail_history_frames == new_trail_history_frames
+        {
+            continue;
+        }
+
+        let new_total = new_amount * new_trail_size;
+        let particles: Vec<ParticleData> =
+            (0..new_total).map(|_| ParticleData::default()).collect();
+
+        let new_particle_buf = buffers.add(ShaderStorageBuffer::from(particles.clone()));
+        let new_indices_buf = buffers.add(ShaderStorageBuffer::from(
+            (0..new_total).collect::<Vec<u32>>(),
+        ));
+        let new_sorted_buf = buffers.add(ShaderStorageBuffer::from(particles));
+
+        let emitter_uniforms = ParticleEmitterUniforms {
+            max_particles: new_total,
+            particle_flags: emitter_data.particle_flags.bits(),
+            trail_size: new_trail_size,
+            transform_align: transform_align_to_u32(emitter_data.draw_pass.transform_align),
+            trail_thickness_curve: bake_thickness_curve(&emitter_data.trail),
+            ..default()
+        };
+        let mut emitter_uniforms_ssbo = ShaderStorageBuffer::default();
+        emitter_uniforms_ssbo.set_data(emitter_uniforms);
+        let new_uniforms_buf = buffers.add(emitter_uniforms_ssbo);
+
+        buffer_handle.particle_buffer = new_particle_buf;
+        buffer_handle.indices_buffer = new_indices_buf;
+        buffer_handle.sorted_particles_buffer = new_sorted_buf.clone();
+        buffer_handle.emitter_uniforms_buffer = new_uniforms_buf.clone();
+        buffer_handle.max_particles = new_total;
+        buffer_handle.amount = new_amount;
+        buffer_handle.trail_size = new_trail_size;
+
+        buffer_handle.trail_history_buffer =
+            create_trail_history_buffer(new_amount, new_trail_history_frames, &mut buffers);
+        buffer_handle.trail_history_frames = new_trail_history_frames;
+        runtime.trail_history_write_index = 0;
+        runtime.trail_history_frames = new_trail_history_frames;
+
+        let new_material = materials.add(create_particle_material_from_config(
+            &emitter_data.draw_pass.material,
+            new_sorted_buf,
+            new_uniforms_buf,
+            &asset_server,
+        ));
+        material3d.0 = new_material.clone();
+        material_handle.0 = new_material;
+        current_material_config.0 = emitter_data.draw_pass.material.clone();
+
+        let new_mesh_handle =
+            mesh_cache.get_or_create(&emitter_data.draw_pass.mesh, new_amount, &mut meshes);
+        mesh3d.0 = new_mesh_handle.clone();
+        mesh_handle.0 = new_mesh_handle.clone();
+        current_config.0 = emitter_data.draw_pass.mesh.clone();
     }
 }
 
@@ -438,12 +599,17 @@ pub fn write_emitter_uniforms(
             continue;
         };
 
+        let trail_size = emitter_data.trail.trail_size();
+        let trail_thickness_curve = bake_thickness_curve(&emitter_data.trail);
+
         let uniforms = ParticleEmitterUniforms {
             emitter_transform: global_transform.to_matrix(),
             max_particles: buffer_handle.max_particles,
-            particle_flags: combined_particle_flags(emitter_data),
+            particle_flags: emitter_data.particle_flags.bits(),
             use_local_coords: emitter_data.draw_pass.use_local_coords as u32,
-            ..default()
+            trail_size,
+            transform_align: transform_align_to_u32(emitter_data.draw_pass.transform_align),
+            trail_thickness_curve,
         };
 
         if let Some(buffer) = buffers.get_mut(&buffer_handle.emitter_uniforms_buffer) {

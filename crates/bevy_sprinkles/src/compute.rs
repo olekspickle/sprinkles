@@ -83,6 +83,7 @@ pub fn init_particle_compute_pipeline(
                 storage_buffer_read_only::<ColliderArray>(false),
                 storage_buffer_sized(false, None),
                 storage_buffer_sized(false, None),
+                storage_buffer_sized(false, None),
             ),
         ),
     );
@@ -122,6 +123,14 @@ pub fn init_particle_compute_pipeline(
         },
     );
 
+    let fallback_trail_history_buffer = render_device.create_buffer_with_data(
+        &bevy::render::render_resource::BufferInitDescriptor {
+            label: Some("fallback_trail_history_buffer"),
+            contents: &[0u8; 64],
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        },
+    );
+
     commands.insert_resource(ParticleComputePipeline {
         bind_group_layout,
         simulate_pipeline,
@@ -129,6 +138,7 @@ pub fn init_particle_compute_pipeline(
     commands.insert_resource(GradientSampler(gradient_sampler));
     commands.insert_resource(CurveSampler(curve_sampler));
     commands.insert_resource(FallbackEmissionBuffer(fallback_emission_buffer));
+    commands.insert_resource(FallbackTrailHistoryBuffer(fallback_trail_history_buffer));
 }
 
 #[derive(Resource)]
@@ -139,6 +149,9 @@ pub struct CurveSampler(pub bevy::render::render_resource::Sampler);
 
 #[derive(Resource)]
 pub struct FallbackEmissionBuffer(pub Buffer);
+
+#[derive(Resource)]
+pub(crate) struct FallbackTrailHistoryBuffer(pub(crate) Buffer);
 
 #[derive(Resource, Default)]
 pub struct EmissionBufferClearList {
@@ -163,6 +176,7 @@ pub fn prepare_particle_compute_bind_groups(
     fallback_gradient_texture: Option<Res<FallbackGradientTexture>>,
     fallback_curve_texture: Option<Res<FallbackCurveTexture>>,
     fallback_emission_buffer: Res<FallbackEmissionBuffer>,
+    fallback_trail_history_buffer: Res<FallbackTrailHistoryBuffer>,
     gradient_sampler: Res<GradientSampler>,
     curve_sampler: Res<CurveSampler>,
 ) {
@@ -293,6 +307,14 @@ pub fn prepare_particle_compute_bind_groups(
         let dst_binding = dst_buffer.unwrap_or(&fallback_emission_buffer.0);
         let src_binding = src_buffer.unwrap_or(&fallback_emission_buffer.0);
 
+        let trail_history_buffer = emitter_data
+            .trail_history_buffer_handle
+            .as_ref()
+            .and_then(|h| gpu_storage_buffers.get(h))
+            .map(|b| &b.buffer);
+        let trail_history_binding =
+            trail_history_buffer.unwrap_or(&fallback_trail_history_buffer.0);
+
         if let Some(buf) = dst_buffer {
             emission_clear_list.push(buf.clone());
         }
@@ -339,6 +361,7 @@ pub fn prepare_particle_compute_bind_groups(
                         colliders_buffer.as_entire_binding(),
                         dst_binding.as_entire_binding(),
                         src_binding.as_entire_binding(),
+                        trail_history_binding.as_entire_binding(),
                     )),
                 )
             })
@@ -464,7 +487,16 @@ impl render_graph::Node for ParticleComputeNode {
                         continue;
                     }
 
-                    let workgroups = (emitter_data.amount + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+                    // for trail passes, the uniform_steps alternate head/trail
+                    // dispatch count: head pass = amount threads, trail pass = amount * (trail_size - 1) threads
+                    let trail_size = emitter_data.trail_size;
+                    let is_trail_pass = trail_size > 1 && step_index % 2 == 1;
+                    let thread_count = if is_trail_pass {
+                        emitter_data.amount * (trail_size - 1)
+                    } else {
+                        emitter_data.amount
+                    };
+                    let workgroups = (thread_count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
                     pass.set_bind_group(0, bind_group, &[]);
                     pass.dispatch_workgroups(workgroups, 1, 1);
                 }

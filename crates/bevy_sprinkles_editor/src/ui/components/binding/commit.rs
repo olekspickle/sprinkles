@@ -120,6 +120,8 @@ const RESPAWN_FIELD_PATHS: &[&str] = &[
     "initial_transform.translation",
     "initial_transform.rotation",
     "initial_transform.scale",
+    "trail.enabled",
+    "trail.thickness_curve",
 ];
 
 fn requires_respawn(path: &str) -> bool {
