@@ -113,9 +113,7 @@ pub(super) fn bind_widget_values(
         if let Some(ct) = reflected.try_downcast_ref::<CurveTexture>() {
             state.set_curve(ct.clone());
         } else if let Some(opt) = reflected.try_downcast_ref::<Option<CurveTexture>>() {
-            if let Some(curve) = opt {
-                state.set_curve(curve.clone());
-            }
+            state.set_curve(opt.clone().unwrap_or_default());
         }
     }
 

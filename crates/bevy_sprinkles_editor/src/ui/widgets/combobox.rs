@@ -513,14 +513,15 @@ fn sync_combobox_selection(
             continue;
         };
         let index_changed = state.last_synced_selected != Some(config.selected);
+        let label = config.label_override.as_deref().unwrap_or(&option.label);
         for (trigger, children) in &triggers {
             if trigger.0 != entity {
                 continue;
             }
             for child in children.iter() {
                 if let Ok(mut text) = texts.get_mut(child) {
-                    if index_changed || **text != option.label {
-                        **text = option.label.clone();
+                    if index_changed || text.as_str() != label {
+                        **text = label.to_string();
                         state.last_synced_selected = Some(config.selected);
                     }
                     break;
