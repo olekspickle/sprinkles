@@ -82,7 +82,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
     // particle index encoded in uv_b.x (instance_index doesn't guarantee particle order)
-    let particle_index = u32(vertex.uv_b.x);
+    let particle_index = u32(round(vertex.uv_b.x));
     let trail_size = emitter_uniforms.trail_size;
     var world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
 
