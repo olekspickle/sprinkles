@@ -62,7 +62,7 @@ impl CurveMaterial {
         let mut tensions = [0.0f32; MAX_POINTS];
         let mut easings = [0u32; MAX_POINTS];
 
-        for (i, point) in curve.points.iter().take(MAX_POINTS).enumerate() {
+        for (i, point) in curve.x.points.iter().take(MAX_POINTS).enumerate() {
             positions[i] = point.position;
             values[i] = point.value as f32;
             modes[i] = point.mode as u32;
@@ -78,9 +78,9 @@ impl CurveMaterial {
 
         Self {
             border_radius: BORDER_RADIUS,
-            point_count: curve.points.len().min(MAX_POINTS) as u32,
-            range_min: curve.range.min,
-            range_max: curve.range.max,
+            point_count: curve.x.points.len().min(MAX_POINTS) as u32,
+            range_min: curve.x.range.min,
+            range_max: curve.x.range.max,
             positions_low,
             positions_high,
             values_low,

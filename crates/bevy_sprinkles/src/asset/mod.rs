@@ -5,7 +5,7 @@ pub(crate) mod serde_helpers;
 /// Asset format version tracking and compatibility validation.
 pub mod versioning;
 
-pub use curve::{CurveEasing, CurveMode, CurvePoint, CurveTexture};
+pub use curve::{Curve, CurveEasing, CurveMode, CurvePoint, CurveTexture};
 pub use gradient::{Gradient, GradientInterpolation, GradientStop, SolidOrGradientColor};
 pub use particle_material::{
     DrawPassMaterial, SerializableAlphaMode, SerializableFace, StandardParticleMaterial,

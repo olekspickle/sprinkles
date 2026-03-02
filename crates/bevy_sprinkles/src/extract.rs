@@ -72,8 +72,8 @@ impl CurveUniform {
         let range_z = curve.effective_range_z();
         Self {
             enabled: 1,
-            min_x: curve.range.min,
-            max_x: curve.range.max,
+            min_x: curve.x.range.min,
+            max_x: curve.x.range.max,
             min_y: range_y.min,
             max_y: range_y.max,
             min_z: range_z.min,

@@ -122,50 +122,73 @@ fn is_empty_string(s: &Option<String>) -> bool {
     s.as_ref().is_none_or(|s| s.is_empty())
 }
 
+/// A single channel of a [`CurveTexture`], pairing control points with an output range.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Reflect)]
+pub struct Curve {
+    /// The control points that define this channel's shape.
+    pub points: Vec<CurvePoint>,
+    /// The output range for this channel. Defaults to `0.0..1.0`.
+    #[serde(default)]
+    pub range: Range,
+}
+
+impl Default for Curve {
+    fn default() -> Self {
+        Self {
+            points: vec![CurvePoint::new(0.0, 1.0), CurvePoint::new(1.0, 1.0)],
+            range: Range::new(0.0, 1.0),
+        }
+    }
+}
+
+impl Curve {
+    /// Creates a new curve from the given control points with a default range.
+    pub fn new(points: Vec<CurvePoint>) -> Self {
+        Self {
+            points,
+            range: Range::default(),
+        }
+    }
+
+    /// Sets the output range for this curve.
+    pub fn with_range(mut self, range: Range) -> Self {
+        self.range = range;
+        self
+    }
+}
+
 /// A piecewise curve defined by control points, baked into a 1D texture for GPU sampling.
 ///
 /// Curve textures are used to animate particle properties (scale, alpha, velocity, etc.)
 /// over each particle's lifetime. The curve maps a normalized lifetime position `[0.0, 1.0]`
-/// to an output value, which is then scaled by the [`range`](Self::range).
+/// to an output value, which is then scaled by the channel's [`range`](Curve::range).
 ///
-/// Each curve can optionally store separate control points for up to three channels
-/// (X/Y/Z). When `points_y` or `points_z` is `None`, those channels fall back to the
-/// primary `points` (X channel). This allows a single `CurveTexture` to represent both
-/// scalar curves and per-axis curves without a separate type.
+/// Each curve texture has a primary X channel and optionally separate Y and Z channels.
+/// When `y` or `z` is `None`, those channels fall back to the X channel. This allows a
+/// single `CurveTexture` to represent both scalar curves and per-axis curves without a
+/// separate type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Reflect)]
 pub struct CurveTexture {
     /// Optional display name for this curve (e.g., "Constant", "Fade Out").
     #[serde(default, skip_serializing_if = "is_empty_string")]
     pub name: Option<String>,
-    /// The control points for the X (primary) channel.
-    pub points: Vec<CurvePoint>,
-    /// Optional control points for the Y channel. Falls back to `points` when `None`.
+    /// The X (primary) channel.
+    pub x: Curve,
+    /// Optional Y channel. Falls back to `x` when `None`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub points_y: Option<Vec<CurvePoint>>,
-    /// Optional control points for the Z channel. Falls back to `points` when `None`.
+    pub y: Option<Curve>,
+    /// Optional Z channel. Falls back to `x` when `None`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub points_z: Option<Vec<CurvePoint>>,
-    /// The output range for the X (primary) channel. Defaults to `0.0..1.0`.
-    #[serde(default)]
-    pub range: Range,
-    /// Optional output range for the Y channel. Falls back to `range` when `None`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub range_y: Option<Range>,
-    /// Optional output range for the Z channel. Falls back to `range` when `None`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub range_z: Option<Range>,
+    pub z: Option<Curve>,
 }
 
 impl Default for CurveTexture {
     fn default() -> Self {
         Self {
             name: Some("Constant".to_string()),
-            points: vec![CurvePoint::new(0.0, 1.0), CurvePoint::new(1.0, 1.0)],
-            points_y: None,
-            points_z: None,
-            range: Range::new(0.0, 1.0),
-            range_y: None,
-            range_z: None,
+            x: Curve::default(),
+            y: None,
+            z: None,
         }
     }
 }
@@ -175,12 +198,9 @@ impl CurveTexture {
     pub fn new(points: Vec<CurvePoint>) -> Self {
         Self {
             name: None,
-            points,
-            points_y: None,
-            points_z: None,
-            range: Range::default(),
-            range_y: None,
-            range_z: None,
+            x: Curve::new(points),
+            y: None,
+            z: None,
         }
     }
 
@@ -192,12 +212,9 @@ impl CurveTexture {
     ) -> Self {
         Self {
             name: None,
-            points: points_x,
-            points_y: Some(points_y),
-            points_z: Some(points_z),
-            range: Range::default(),
-            range_y: None,
-            range_z: None,
+            x: Curve::new(points_x),
+            y: Some(Curve::new(points_y)),
+            z: Some(Curve::new(points_z)),
         }
     }
 
@@ -209,53 +226,39 @@ impl CurveTexture {
 
     /// Sets the output range for the X (primary) channel.
     pub fn with_range(mut self, range: Range) -> Self {
-        self.range = range;
+        self.x.range = range;
         self
     }
 
-    /// Sets the output range for the Y channel.
-    pub fn with_range_y(mut self, range: Range) -> Self {
-        self.range_y = Some(range);
-        self
-    }
-
-    /// Sets the output range for the Z channel.
-    pub fn with_range_z(mut self, range: Range) -> Self {
-        self.range_z = Some(range);
-        self
-    }
-
-    /// Returns the effective range for the Y channel, falling back to `range` when unset.
+    /// Returns the effective range for the Y channel, falling back to the X range when unset.
     pub fn effective_range_y(&self) -> &Range {
-        self.range_y.as_ref().unwrap_or(&self.range)
+        self.y.as_ref().map(|c| &c.range).unwrap_or(&self.x.range)
     }
 
-    /// Returns the effective range for the Z channel, falling back to `range` when unset.
+    /// Returns the effective range for the Z channel, falling back to the X range when unset.
     pub fn effective_range_z(&self) -> &Range {
-        self.range_z.as_ref().unwrap_or(&self.range)
+        self.z.as_ref().map(|c| &c.range).unwrap_or(&self.x.range)
     }
 
     /// Computes a hash key for texture caching.
     pub fn cache_key(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        hash_points(&self.points, &mut hasher);
-        self.range.min.to_bits().hash(&mut hasher);
-        self.range.max.to_bits().hash(&mut hasher);
-        if let Some(points_y) = &self.points_y {
+        hash_points(&self.x.points, &mut hasher);
+        self.x.range.min.to_bits().hash(&mut hasher);
+        self.x.range.max.to_bits().hash(&mut hasher);
+        if let Some(y) = &self.y {
             1u8.hash(&mut hasher);
-            hash_points(points_y, &mut hasher);
-            let range_y = self.effective_range_y();
-            range_y.min.to_bits().hash(&mut hasher);
-            range_y.max.to_bits().hash(&mut hasher);
+            hash_points(&y.points, &mut hasher);
+            y.range.min.to_bits().hash(&mut hasher);
+            y.range.max.to_bits().hash(&mut hasher);
         } else {
             0u8.hash(&mut hasher);
         }
-        if let Some(points_z) = &self.points_z {
+        if let Some(z) = &self.z {
             1u8.hash(&mut hasher);
-            hash_points(points_z, &mut hasher);
-            let range_z = self.effective_range_z();
-            range_z.min.to_bits().hash(&mut hasher);
-            range_z.max.to_bits().hash(&mut hasher);
+            hash_points(&z.points, &mut hasher);
+            z.range.min.to_bits().hash(&mut hasher);
+            z.range.max.to_bits().hash(&mut hasher);
         } else {
             0u8.hash(&mut hasher);
         }
@@ -265,35 +268,34 @@ impl CurveTexture {
     /// Returns `true` if all channels are flat and would produce the same output,
     /// meaning the curve can be safely skipped without affecting the result.
     pub fn is_constant(&self) -> bool {
-        if !points_are_constant(&self.points) {
+        if !points_are_constant(&self.x.points) {
             return false;
         }
-        let x_value = self.points.first().map(|p| p.value).unwrap_or(1.0);
+        let x_value = self.x.points.first().map(|p| p.value).unwrap_or(1.0);
 
-        if let Some(points_y) = &self.points_y {
-            if !points_are_constant(points_y) {
+        if let Some(y) = &self.y {
+            if !points_are_constant(&y.points) {
                 return false;
             }
-            let y_value = points_y.first().map(|p| p.value).unwrap_or(1.0);
+            let y_value = y.points.first().map(|p| p.value).unwrap_or(1.0);
             if (y_value - x_value).abs() > f64::EPSILON {
                 return false;
             }
-        }
-        if let Some(points_z) = &self.points_z {
-            if !points_are_constant(points_z) {
+            if y.range != self.x.range {
                 return false;
             }
-            let z_value = points_z.first().map(|p| p.value).unwrap_or(1.0);
+        }
+        if let Some(z) = &self.z {
+            if !points_are_constant(&z.points) {
+                return false;
+            }
+            let z_value = z.points.first().map(|p| p.value).unwrap_or(1.0);
             if (z_value - x_value).abs() > f64::EPSILON {
                 return false;
             }
-        }
-
-        if self.range_y.as_ref().is_some_and(|r| r != &self.range) {
-            return false;
-        }
-        if self.range_z.as_ref().is_some_and(|r| r != &self.range) {
-            return false;
+            if z.range != self.x.range {
+                return false;
+            }
         }
 
         true
@@ -301,16 +303,16 @@ impl CurveTexture {
 
     /// Samples the X (primary) channel at position `t` (clamped to `[0.0, 1.0]`).
     pub fn sample(&self, t: f32) -> f32 {
-        sample_points(&self.points, t)
+        sample_points(&self.x.points, t)
     }
 
     /// Samples a specific channel at position `t`. Channel 0 is X, 1 is Y, 2 is Z.
     /// Y and Z fall back to the X channel when unset.
     pub fn sample_channel(&self, channel: usize, t: f32) -> f32 {
         let points = match channel {
-            1 => self.points_y.as_deref().unwrap_or(&self.points),
-            2 => self.points_z.as_deref().unwrap_or(&self.points),
-            _ => &self.points,
+            1 => self.y.as_ref().map(|c| &c.points[..]).unwrap_or(&self.x.points),
+            2 => self.z.as_ref().map(|c| &c.points[..]).unwrap_or(&self.x.points),
+            _ => &self.x.points,
         };
         sample_points(points, t)
     }

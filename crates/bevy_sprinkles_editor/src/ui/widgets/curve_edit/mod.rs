@@ -246,34 +246,34 @@ impl CurveControl for PointHandle {
     }
 
     fn update_state(&self, state: &mut CurveEditState, normalized: Vec2, _delta: Option<Vec2>) {
-        if self.index >= state.curve.points.len() {
+        if self.index >= state.curve.x.points.len() {
             return;
         }
 
         let new_pos = (normalized.x + 0.5).clamp(0.0, 1.0);
         let snapped_pos = (new_pos as f64 / DRAG_SNAP_STEP).round() * DRAG_SNAP_STEP;
         let prev_pos = if self.index > 0 {
-            state.curve.points[self.index - 1].position + 0.001
+            state.curve.x.points[self.index - 1].position + 0.001
         } else {
             0.0
         };
-        let next_pos = if self.index < state.curve.points.len() - 1 {
-            state.curve.points[self.index + 1].position - 0.001
+        let next_pos = if self.index < state.curve.x.points.len() - 1 {
+            state.curve.x.points[self.index + 1].position - 0.001
         } else {
             1.0
         };
         let clamped_pos = (snapped_pos as f32).clamp(prev_pos, next_pos);
 
-        let range_min = state.curve.range.min as f64;
-        let range_max = state.curve.range.max as f64;
-        let range_span = state.curve.range.span() as f64;
+        let range_min = state.curve.x.range.min as f64;
+        let range_max = state.curve.x.range.max as f64;
+        let range_span = state.curve.x.range.span() as f64;
         let normalized_value = 0.5 - normalized.y;
         let raw_value =
             (range_min + normalized_value as f64 * range_span).clamp(range_min, range_max);
         let snapped_value = (raw_value / DRAG_SNAP_STEP).round() * DRAG_SNAP_STEP;
 
-        state.curve.points[self.index].position = clamped_pos;
-        state.curve.points[self.index].value = snapped_value;
+        state.curve.x.points[self.index].position = clamped_pos;
+        state.curve.x.points[self.index].value = snapped_value;
 
         state.mark_custom();
     }
@@ -293,7 +293,7 @@ impl CurveControl for TensionHandle {
     }
 
     fn update_state(&self, state: &mut CurveEditState, _normalized: Vec2, delta: Option<Vec2>) {
-        if self.index == 0 || self.index >= state.curve.points.len() {
+        if self.index == 0 || self.index >= state.curve.x.points.len() {
             return;
         }
 
@@ -301,7 +301,7 @@ impl CurveControl for TensionHandle {
             return;
         };
 
-        let p1 = &state.curve.points[self.index];
+        let p1 = &state.curve.x.points[self.index];
         let mode = p1.mode;
         let current_tension = p1.tension;
 
@@ -312,13 +312,13 @@ impl CurveControl for TensionHandle {
                 let tension_delta = -delta.y as f64 * TENSION_SENSITIVITY;
                 let raw_tension = (current_tension + tension_delta).clamp(-1.0, 1.0);
                 let snapped_tension = (raw_tension / DRAG_SNAP_STEP).round() * DRAG_SNAP_STEP;
-                state.curve.points[self.index].tension = snapped_tension;
+                state.curve.x.points[self.index].tension = snapped_tension;
             }
             CurveMode::Stairs | CurveMode::SmoothStairs => {
                 let tension_delta = -delta.y as f64 * TENSION_SENSITIVITY;
                 let raw_tension = (current_tension + tension_delta).clamp(0.0, 1.0);
                 let snapped_tension = (raw_tension / DRAG_SNAP_STEP).round() * DRAG_SNAP_STEP;
-                state.curve.points[self.index].tension = snapped_tension;
+                state.curve.x.points[self.index].tension = snapped_tension;
             }
             CurveMode::Hold => {}
         }
@@ -649,7 +649,7 @@ fn setup_curve_edit_content(
                 .spawn((
                     CurveCanvas {
                         curve_edit: curve_edit_entity,
-                        point_count: state.curve.points.len(),
+                        point_count: state.curve.x.points.len(),
                     },
                     Hovered::default(),
                     Node {
@@ -697,7 +697,7 @@ fn setup_curve_edit_content(
                         .with_label("Range")
                         .with_size(VectorSize::Vec2)
                         .with_suffixes(VectorSuffixes::Range)
-                        .with_default_values(vec![state.curve.range.min, state.curve.range.max]),
+                        .with_default_values(vec![state.curve.x.range.min, state.curve.x.range.max]),
                 ),
             ));
         });
@@ -710,11 +710,11 @@ fn spawn_point_handles(
     canvas_entity: Entity,
     curve: &CurveTexture,
 ) {
-    let range_span = curve.range.span();
+    let range_span = curve.x.range.span();
 
-    for (i, point) in curve.points.iter().enumerate() {
+    for (i, point) in curve.x.points.iter().enumerate() {
         let x = point.position;
-        let normalized_value = (point.value as f32 - curve.range.min) / range_span;
+        let normalized_value = (point.value as f32 - curve.x.range.min) / range_span;
         let y = 1.0 - normalized_value;
 
         parent
@@ -741,11 +741,11 @@ fn spawn_tension_handles(
     canvas_entity: Entity,
     curve: &CurveTexture,
 ) {
-    let range_span = curve.range.span();
+    let range_span = curve.x.range.span();
 
-    for i in 1..curve.points.len() {
-        let p0 = &curve.points[i - 1];
-        let p1 = &curve.points[i];
+    for i in 1..curve.x.points.len() {
+        let p0 = &curve.x.points[i - 1];
+        let p1 = &curve.x.points[i];
 
         if p1.mode == CurveMode::Hold {
             continue;
@@ -753,7 +753,7 @@ fn spawn_tension_handles(
 
         let mid_x = (p0.position + p1.position) / 2.0;
         let curve_value_at_mid = curve.sample(mid_x);
-        let normalized_curve_value = (curve_value_at_mid - curve.range.min) / range_span;
+        let normalized_curve_value = (curve_value_at_mid - curve.x.range.min) / range_span;
         let y = 1.0 - normalized_curve_value;
 
         parent
@@ -820,18 +820,18 @@ fn update_curve_visuals(
             }
         }
 
-        let range_span = state.curve.range.span();
+        let range_span = state.curve.x.range.span();
 
         for (handle, mut node) in &mut point_handles {
             if handle.curve_edit != curve_edit_entity {
                 continue;
             }
-            let Some(point) = state.curve.points.get(handle.index) else {
+            let Some(point) = state.curve.x.points.get(handle.index) else {
                 continue;
             };
 
             let x = point.position;
-            let normalized_value = (point.value as f32 - state.curve.range.min) / range_span;
+            let normalized_value = (point.value as f32 - state.curve.x.range.min) / range_span;
             let y = 1.0 - normalized_value;
 
             node.left = percent(x * 100.0 - POINT_HANDLE_SIZE / CANVAS_SIZE * 50.0);
@@ -842,16 +842,16 @@ fn update_curve_visuals(
             if handle.curve_edit != curve_edit_entity {
                 continue;
             }
-            if handle.index == 0 || handle.index >= state.curve.points.len() {
+            if handle.index == 0 || handle.index >= state.curve.x.points.len() {
                 continue;
             }
 
-            let p0 = &state.curve.points[handle.index - 1];
-            let p1 = &state.curve.points[handle.index];
+            let p0 = &state.curve.x.points[handle.index - 1];
+            let p1 = &state.curve.x.points[handle.index];
 
             let mid_x = (p0.position + p1.position) / 2.0;
             let curve_value_at_mid = state.curve.sample(mid_x);
-            let normalized_curve_value = (curve_value_at_mid - state.curve.range.min) / range_span;
+            let normalized_curve_value = (curve_value_at_mid - state.curve.x.range.min) / range_span;
             let y = 1.0 - normalized_curve_value;
 
             node.left = percent(mid_x * 100.0 - TENSION_HANDLE_SIZE / CANVAS_SIZE * 50.0);
@@ -873,7 +873,7 @@ fn respawn_handles_on_point_change(
                 continue;
             }
 
-            let current_point_count = state.curve.points.len();
+            let current_point_count = state.curve.x.points.len();
             if canvas.point_count == current_point_count {
                 continue;
             }
@@ -955,7 +955,7 @@ fn handle_preset_change(
         return;
     };
 
-    let range = state.curve.range;
+    let range = state.curve.x.range;
 
     if let Some(preset) = CURVE_PRESETS.get(trigger.selected) {
         state.curve = preset.to_curve(range);
@@ -981,26 +981,27 @@ fn handle_flip_click(
 
     let interp_props: Vec<_> = state
         .curve
+        .x
         .points
         .iter()
         .skip(1)
         .map(|p| (p.mode, p.easing, p.tension))
         .collect();
 
-    for point in &mut state.curve.points {
+    for point in &mut state.curve.x.points {
         point.position = 1.0 - point.position;
     }
 
-    state.curve.points.reverse();
+    state.curve.x.points.reverse();
 
-    if let Some(first) = state.curve.points.first_mut() {
+    if let Some(first) = state.curve.x.points.first_mut() {
         first.mode = CurveMode::default();
         first.easing = CurveEasing::default();
         first.tension = 0.0;
     }
 
     for (i, (mode, easing, tension)) in interp_props.iter().rev().enumerate() {
-        if let Some(point) = state.curve.points.get_mut(i + 1) {
+        if let Some(point) = state.curve.x.points.get_mut(i + 1) {
             point.mode = *mode;
             point.easing = *easing;
             point.tension = *tension;
@@ -1068,7 +1069,7 @@ fn sync_range_inputs_to_state(
                 continue;
             }
 
-            let values = [state.curve.range.min, state.curve.range.max];
+            let values = [state.curve.x.range.min, state.curve.x.range.max];
 
             for range_child in range_children.iter() {
                 let Ok(vector_children) = vector_edits.get(range_child) else {
@@ -1149,19 +1150,19 @@ fn handle_range_blur(
 
                 let mut changed = false;
                 if field_index == 0 {
-                    if (state.curve.range.min - value).abs() > f32::EPSILON {
-                        state.curve.range.min = value;
+                    if (state.curve.x.range.min - value).abs() > f32::EPSILON {
+                        state.curve.x.range.min = value;
                         changed = true;
                     }
-                } else if (state.curve.range.max - value).abs() > f32::EPSILON {
-                    state.curve.range.max = value;
+                } else if (state.curve.x.range.max - value).abs() > f32::EPSILON {
+                    state.curve.x.range.max = value;
                     changed = true;
                 }
 
                 if changed {
-                    let range_min = state.curve.range.min as f64;
-                    let range_max = state.curve.range.max as f64;
-                    for point in &mut state.curve.points {
+                    let range_min = state.curve.x.range.min as f64;
+                    let range_max = state.curve.x.range.max as f64;
+                    for point in &mut state.curve.x.points {
                         point.value = point.value.clamp(range_min, range_max);
                     }
 
@@ -1210,7 +1211,7 @@ fn handle_canvas_right_click(
             continue;
         };
 
-        if state.curve.points.len() >= MAX_POINTS {
+        if state.curve.x.points.len() >= MAX_POINTS {
             continue;
         }
 
@@ -1222,8 +1223,8 @@ fn handle_canvas_right_click(
         let normalized_x = (normalized.x + 0.5).clamp(0.0, 1.0);
         let normalized_y = (0.5 - normalized.y).clamp(0.0, 1.0);
 
-        let range_min = state.curve.range.min as f64;
-        let range_span = state.curve.range.span() as f64;
+        let range_min = state.curve.x.range.min as f64;
+        let range_span = state.curve.x.range.span() as f64;
         let value = range_min + normalized_y as f64 * range_span;
 
         let new_point = CurvePoint::new(normalized_x, value)
@@ -1232,12 +1233,13 @@ fn handle_canvas_right_click(
 
         let insert_idx = state
             .curve
+            .x
             .points
             .iter()
             .position(|p| p.position > normalized_x)
-            .unwrap_or(state.curve.points.len());
+            .unwrap_or(state.curve.x.points.len());
 
-        state.curve.points.insert(insert_idx, new_point);
+        state.curve.x.points.insert(insert_idx, new_point);
         state.mark_custom();
         trigger_curve_events(&mut commands, canvas.curve_edit, &state.curve);
 
@@ -1376,12 +1378,12 @@ fn handle_point_right_click(
             continue;
         };
 
-        let Some(point) = state.curve.points.get(point_handle.index) else {
+        let Some(point) = state.curve.x.points.get(point_handle.index) else {
             continue;
         };
 
         let is_first = point_handle.index == 0;
-        let can_delete = state.curve.points.len() > 2;
+        let can_delete = state.curve.x.points.len() > 2;
 
         let popover_entity = commands
             .spawn((
@@ -1461,7 +1463,7 @@ fn handle_point_mode_change(
     if let Ok(mode_opt) = mode_options.get(trigger.entity) {
         if !mode_opt.disabled {
             if let Ok(mut state) = states.get_mut(mode_opt.curve_edit) {
-                if let Some(point) = state.curve.points.get_mut(mode_opt.point_index) {
+                if let Some(point) = state.curve.x.points.get_mut(mode_opt.point_index) {
                     point.mode = mode_opt.mode;
                     state.mark_custom();
                     trigger_curve_events(&mut commands, mode_opt.curve_edit, &state.curve);
@@ -1472,7 +1474,7 @@ fn handle_point_mode_change(
     } else if let Ok(easing_opt) = easing_options.get(trigger.entity) {
         if !easing_opt.disabled {
             if let Ok(mut state) = states.get_mut(easing_opt.curve_edit) {
-                if let Some(point) = state.curve.points.get_mut(easing_opt.point_index) {
+                if let Some(point) = state.curve.x.points.get_mut(easing_opt.point_index) {
                     point.easing = easing_opt.easing;
                     state.mark_custom();
                     trigger_curve_events(&mut commands, easing_opt.curve_edit, &state.curve);
@@ -1483,8 +1485,8 @@ fn handle_point_mode_change(
     } else if let Ok(delete_opt) = delete_options.get(trigger.entity) {
         if !delete_opt.disabled {
             if let Ok(mut state) = states.get_mut(delete_opt.curve_edit) {
-                if state.curve.points.len() > 2 {
-                    state.curve.points.remove(delete_opt.point_index);
+                if state.curve.x.points.len() > 2 {
+                    state.curve.x.points.remove(delete_opt.point_index);
                     state.mark_custom();
                     trigger_curve_events(&mut commands, delete_opt.curve_edit, &state.curve);
                     handled = true;
@@ -1519,7 +1521,7 @@ fn handle_tension_right_click(
             continue;
         };
 
-        if let Some(point) = state.curve.points.get_mut(tension_handle.index) {
+        if let Some(point) = state.curve.x.points.get_mut(tension_handle.index) {
             point.tension = 0.0;
             state.mark_custom();
             trigger_curve_events(&mut commands, tension_handle.curve_edit, &state.curve);

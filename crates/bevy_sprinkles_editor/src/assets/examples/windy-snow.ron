@@ -74,39 +74,41 @@
                     ],
                 ),
                 alpha_over_lifetime: Some((
-                    points: [
-                        (
-                            position: 0.0,
-                            value: 0.0,
-                            mode: DoubleCurve,
-                            tension: 0.0,
-                            easing: Power,
+                    x: (
+                        points: [
+                            (
+                                position: 0.0,
+                                value: 0.0,
+                                mode: DoubleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 0.22,
+                                value: 0.4,
+                                mode: DoubleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 0.57,
+                                value: 1.0,
+                                mode: DoubleCurve,
+                                tension: 0.25,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.01,
+                                mode: SingleCurve,
+                                tension: -0.5005005005,
+                                easing: Power,
+                            ),
+                        ],
+                        range: (
+                            min: 0.0,
+                            max: 1.0,
                         ),
-                        (
-                            position: 0.22,
-                            value: 0.4,
-                            mode: DoubleCurve,
-                            tension: 0.0,
-                            easing: Power,
-                        ),
-                        (
-                            position: 0.57,
-                            value: 1.0,
-                            mode: DoubleCurve,
-                            tension: 0.25,
-                            easing: Power,
-                        ),
-                        (
-                            position: 1.0,
-                            value: 0.01,
-                            mode: SingleCurve,
-                            tension: -0.5005005005,
-                            easing: Power,
-                        ),
-                    ],
-                    range: (
-                        min: 0.0,
-                        max: 1.0,
                     ),
                 )),
             ),

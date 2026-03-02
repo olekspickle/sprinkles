@@ -1,7 +1,8 @@
 pub use crate::SprinklesPlugin;
 
 pub use crate::asset::{
-    AnimatedVelocity, ColliderData, CurveEasing, CurveMode, CurvePoint, CurveTexture, DrawOrder,
+    AnimatedVelocity, ColliderData, Curve, CurveEasing, CurveMode, CurvePoint, CurveTexture,
+    DrawOrder,
     DrawPassMaterial, EmissionShape, EmitterAccelerations, EmitterCollision, EmitterCollisionMode,
     EmitterColors, EmitterData, EmitterDrawPass, EmitterEmission, EmitterScale, EmitterTime,
     EmitterTrail, EmitterTurbulence, EmitterVelocities, Gradient as ParticleGradient,

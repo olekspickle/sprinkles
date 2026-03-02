@@ -153,25 +153,27 @@
                 ),
                 alpha_over_lifetime: Some((
                     name: Some("Quad out"),
-                    points: [
-                        (
-                            position: 0.0,
-                            value: 1.0,
-                            mode: DoubleCurve,
-                            tension: 0.0,
-                            easing: Power,
+                    x: (
+                        points: [
+                            (
+                                position: 0.0,
+                                value: 1.0,
+                                mode: DoubleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 0.0,
+                                mode: SingleCurve,
+                                tension: -0.5005005005,
+                                easing: Power,
+                            ),
+                        ],
+                        range: (
+                            min: 0.0,
+                            max: 1.0,
                         ),
-                        (
-                            position: 1.0,
-                            value: 0.0,
-                            mode: SingleCurve,
-                            tension: -0.5005005005,
-                            easing: Power,
-                        ),
-                    ],
-                    range: (
-                        min: 0.0,
-                        max: 1.0,
                     ),
                 )),
             ),

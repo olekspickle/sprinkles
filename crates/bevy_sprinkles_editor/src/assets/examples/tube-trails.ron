@@ -94,25 +94,27 @@
                 sections: 8,
                 section_length: 0.2,
                 thickness_curve: Some((
-                    points: [
-                        (
-                            position: 0.0,
-                            value: 0.0,
-                            mode: DoubleCurve,
-                            tension: 0.0,
-                            easing: Power,
+                    x: (
+                        points: [
+                            (
+                                position: 0.0,
+                                value: 0.0,
+                                mode: DoubleCurve,
+                                tension: 0.0,
+                                easing: Power,
+                            ),
+                            (
+                                position: 1.0,
+                                value: 1.0,
+                                mode: DoubleCurve,
+                                tension: 1.0,
+                                easing: Sine,
+                            ),
+                        ],
+                        range: (
+                            min: 0.0,
+                            max: 1.0,
                         ),
-                        (
-                            position: 1.0,
-                            value: 1.0,
-                            mode: DoubleCurve,
-                            tension: 1.0,
-                            easing: Sine,
-                        ),
-                    ],
-                    range: (
-                        min: 0.0,
-                        max: 1.0,
                     ),
                 )),
             ),
