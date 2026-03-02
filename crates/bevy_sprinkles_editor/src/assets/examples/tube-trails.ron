@@ -12,7 +12,7 @@
                 mesh: TubeTrail(
                     radius: 0.05,
                     radial_steps: 6,
-                    sections: 3,
+                    sections: 8,
                     section_length: 0.2,
                     section_rings: 3,
                 ),
@@ -91,8 +91,6 @@
             trail: (
                 enabled: true,
                 stretch_time: 0.3,
-                sections: 8,
-                section_length: 0.2,
                 thickness_curve: Some((
                     x: (
                         points: [

@@ -31,7 +31,7 @@ fn create_trail_history_buffer(
 }
 
 fn compute_trail_history_frames(emitter: &EmitterData) -> u32 {
-    let trail_size = emitter.trail.trail_size();
+    let trail_size = emitter.trail_size();
     if trail_size <= 1 {
         return 0;
     }
@@ -257,7 +257,7 @@ pub fn setup_particle_systems(
 
         for (emitter_index, emitter) in asset.emitters.iter().enumerate() {
             let amount = emitter.emission.particles_amount;
-            let trail_size = emitter.trail.trail_size();
+            let trail_size = emitter.trail_size();
             let total_slots = amount * trail_size;
 
             let particles: Vec<ParticleData> =
@@ -514,7 +514,7 @@ pub(crate) fn sync_particle_buffers(
         };
 
         let new_amount = emitter_data.emission.particles_amount;
-        let new_trail_size = emitter_data.trail.trail_size();
+        let new_trail_size = emitter_data.trail_size();
         let new_trail_history_frames = compute_trail_history_frames(emitter_data);
 
         if buffer_handle.amount == new_amount
@@ -599,7 +599,7 @@ pub fn write_emitter_uniforms(
             continue;
         };
 
-        let trail_size = emitter_data.trail.trail_size();
+        let trail_size = emitter_data.trail_size();
         let trail_thickness_curve = bake_thickness_curve(&emitter_data.trail);
 
         let uniforms = ParticleEmitterUniforms {

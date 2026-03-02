@@ -658,7 +658,7 @@ pub fn extract_particle_systems(
             (world_matrix, Mat4::IDENTITY)
         };
 
-        let trail_size = emitter.trail.trail_size();
+        let trail_size = emitter.trail_size();
         let trail_stretch_time = emitter.trail.stretch_time;
 
         let effective_fps = if emitter.time.fixed_fps > 0 {

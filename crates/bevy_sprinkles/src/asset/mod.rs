@@ -370,6 +370,15 @@ impl Default for EmitterData {
     }
 }
 
+impl EmitterData {
+    pub(crate) fn trail_size(&self) -> u32 {
+        if !self.trail.enabled {
+            return 1;
+        }
+        self.draw_pass.mesh.trail_sections().unwrap_or(1)
+    }
+}
+
 /// Controls how each particle's transform is aligned relative to the camera or its velocity.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Reflect)]
 pub enum TransformAlign {
@@ -541,6 +550,16 @@ impl ParticleMesh {
     /// Returns `true` if this is a trail mesh variant.
     pub fn is_trail(&self) -> bool {
         matches!(self, Self::TubeTrail { .. } | Self::RibbonTrail { .. })
+    }
+
+    /// Returns the number of trail sections for trail mesh variants, or `None` for other meshes.
+    pub fn trail_sections(&self) -> Option<u32> {
+        match self {
+            Self::TubeTrail { sections, .. } | Self::RibbonTrail { sections, .. } => {
+                Some(*sections)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -1272,17 +1291,11 @@ fn default_trail_stretch_time() -> f32 {
     0.3
 }
 
-fn default_trail_sections() -> u32 {
-    8
-}
-
-fn default_trail_section_length() -> f32 {
-    0.2
-}
-
 /// Trail configuration for an emitter.
 ///
 /// When enabled, each particle leaves a visible trail behind it as it moves.
+/// The number of trail segments is determined by the mesh's `sections` field
+/// (on [`ParticleMesh::TubeTrail`] or [`ParticleMesh::RibbonTrail`]).
 #[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub struct EmitterTrail {
     /// Whether trails are enabled. Defaults to `false`.
@@ -1293,12 +1306,6 @@ pub struct EmitterTrail {
     /// Defaults to `0.3`.
     #[serde(default = "default_trail_stretch_time")]
     pub stretch_time: f32,
-    /// The number of trail sections (segments including head). Defaults to `8`.
-    #[serde(default = "default_trail_sections")]
-    pub sections: u32,
-    /// The length of each trail section. Defaults to `0.2`.
-    #[serde(default = "default_trail_section_length")]
-    pub section_length: f32,
     /// Optional curve that controls trail thickness from head (0) to tail (1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thickness_curve: Option<CurveTexture>,
@@ -1309,8 +1316,6 @@ impl Default for EmitterTrail {
         Self {
             enabled: false,
             stretch_time: default_trail_stretch_time(),
-            sections: default_trail_sections(),
-            section_length: default_trail_section_length(),
             thickness_curve: None,
         }
     }
@@ -1322,14 +1327,7 @@ impl EmitterTrail {
             return false;
         }
         let d = Self::default();
-        self.stretch_time == d.stretch_time
-            && self.sections == d.sections
-            && self.section_length == d.section_length
-            && self.thickness_curve.is_none()
-    }
-
-    pub(crate) fn trail_size(&self) -> u32 {
-        if self.enabled { self.sections } else { 1 }
+        self.stretch_time == d.stretch_time && self.thickness_curve.is_none()
     }
 }
 
