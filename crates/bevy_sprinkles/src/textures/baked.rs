@@ -251,7 +251,10 @@ pub fn prepare_curve_textures(
                 &mut images,
             );
             cache.prepare_optional(
-                &emitter.velocities.directional_velocity.velocity_over_lifetime,
+                &emitter
+                    .velocities
+                    .directional_velocity
+                    .velocity_over_lifetime,
                 &mut images,
             );
         }

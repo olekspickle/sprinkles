@@ -310,8 +310,16 @@ impl CurveTexture {
     /// Y and Z fall back to the X channel when unset.
     pub fn sample_channel(&self, channel: usize, t: f32) -> f32 {
         let points = match channel {
-            1 => self.y.as_ref().map(|c| &c.points[..]).unwrap_or(&self.x.points),
-            2 => self.z.as_ref().map(|c| &c.points[..]).unwrap_or(&self.x.points),
+            1 => self
+                .y
+                .as_ref()
+                .map(|c| &c.points[..])
+                .unwrap_or(&self.x.points),
+            2 => self
+                .z
+                .as_ref()
+                .map(|c| &c.points[..])
+                .unwrap_or(&self.x.points),
             _ => &self.x.points,
         };
         sample_points(points, t)

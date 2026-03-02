@@ -2,15 +2,14 @@ pub use crate::SprinklesPlugin;
 
 pub use crate::asset::{
     AnimatedVelocity, ColliderData, Curve, CurveEasing, CurveMode, CurvePoint, CurveTexture,
-    DrawOrder,
-    DrawPassMaterial, EmissionShape, EmitterAccelerations, EmitterCollision, EmitterCollisionMode,
-    EmitterColors, EmitterData, EmitterDrawPass, EmitterEmission, EmitterScale, EmitterTime,
-    EmitterTrail, EmitterTurbulence, EmitterVelocities, Gradient as ParticleGradient,
-    GradientInterpolation, GradientStop, InitialTransform, ParticleFlags, ParticleMesh,
-    ParticleSystemAsset, ParticleSystemAuthors, ParticleSystemDimension, ParticlesColliderShape3D,
-    QuadOrientation, Range as ParticleRange, RibbonTrailShape, SerializableAlphaMode,
-    SerializableFace, SolidOrGradientColor, StandardParticleMaterial, SubEmitterConfig,
-    SubEmitterMode, TransformAlign,
+    DrawOrder, DrawPassMaterial, EmissionShape, EmitterAccelerations, EmitterCollision,
+    EmitterCollisionMode, EmitterColors, EmitterData, EmitterDrawPass, EmitterEmission,
+    EmitterScale, EmitterTime, EmitterTrail, EmitterTurbulence, EmitterVelocities,
+    Gradient as ParticleGradient, GradientInterpolation, GradientStop, InitialTransform,
+    ParticleFlags, ParticleMesh, ParticleSystemAsset, ParticleSystemAuthors,
+    ParticleSystemDimension, ParticlesColliderShape3D, QuadOrientation, Range as ParticleRange,
+    RibbonTrailShape, SerializableAlphaMode, SerializableFace, SolidOrGradientColor,
+    StandardParticleMaterial, SubEmitterConfig, SubEmitterMode, TransformAlign,
 };
 #[cfg(feature = "preset-textures")]
 pub use crate::textures::preset::PresetTexture;
