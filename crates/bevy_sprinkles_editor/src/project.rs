@@ -12,7 +12,7 @@ use inflector::Inflector;
 use crate::io::{EditorData, is_example_path, project_path, projects_dir, save_editor_data};
 use crate::state::{DirtyState, EditorState, Inspectable, Inspecting};
 use crate::ui::components::toasts::ToastEvent;
-use crate::utils::simplify_path;
+use crate::utils::{MAX_DISPLAY_PATH_LEN, simplify_path, truncate_path};
 
 pub fn plugin(app: &mut App) {
     app.add_observer(on_open_project_event)
@@ -59,20 +59,27 @@ pub enum SaveResultStatus {
 #[derive(Resource, Clone)]
 pub struct SaveResult(pub Arc<Mutex<Option<SaveResultStatus>>>);
 
+pub enum LoadProjectError {
+    /// The file could not be read from disk.
+    Read(std::io::Error),
+    /// The file contents could not be parsed as a valid project.
+    Parse,
+}
+
 pub fn load_project_from_path(
     path: &std::path::Path,
-) -> Option<bevy_sprinkles::asset::ParticleSystemAsset> {
-    let contents = std::fs::read_to_string(path)
-        .map_err(|err| {
-            warn!("Failed to read project file: '{err}' [{path:?}]");
-        })
-        .ok()?;
+) -> Result<bevy_sprinkles::asset::ParticleSystemAsset, LoadProjectError> {
+    let contents = std::fs::read_to_string(path).map_err(|err| {
+        error!("Failed to read project file: {path:?}");
+        error!("{err}");
+        LoadProjectError::Read(err)
+    })?;
 
-    ron::from_str(&contents)
-        .map_err(|err| {
-            warn!("Failed to parse project file: '{err}' [{path:?}]");
-        })
-        .ok()
+    ron::from_str(&contents).map_err(|err| {
+        error!("Failed to parse project file: {path:?}");
+        error!("{err}");
+        LoadProjectError::Parse
+    })
 }
 
 fn on_open_project_event(
@@ -87,11 +94,27 @@ fn on_open_project_event(
     let path = project_path(location);
     let is_example = is_example_path(&path);
 
-    let Some(mut asset) = load_project_from_path(&path) else {
-        commands.trigger(ToastEvent::error(format!(
-            "Failed to open project: {location}"
-        )));
-        return;
+    let mut asset = match load_project_from_path(&path) {
+        Ok(asset) => asset,
+        Err(err) => {
+            let display = truncate_path(location, MAX_DISPLAY_PATH_LEN);
+            let message = match &err {
+                LoadProjectError::Read(io_err) => match io_err.kind() {
+                    std::io::ErrorKind::NotFound => {
+                        format!("Project file not found: \"{display}\"")
+                    }
+                    std::io::ErrorKind::PermissionDenied => {
+                        format!("Permission denied: \"{display}\"")
+                    }
+                    _ => format!("Could not read project file: \"{display}\""),
+                },
+                LoadProjectError::Parse => {
+                    format!("Project \"{display}\" is corrupted or invalid")
+                }
+            };
+            commands.trigger(ToastEvent::error(message));
+            return;
+        }
     };
 
     let filename = path

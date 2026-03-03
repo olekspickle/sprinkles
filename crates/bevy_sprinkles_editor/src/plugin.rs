@@ -77,7 +77,7 @@ fn load_initial_project(
         } else {
             project_path(file)
         };
-        if let Some(asset) = load_project_from_path(&path) {
+        if let Ok(asset) = load_project_from_path(&path) {
             let has_emitters = !asset.emitters.is_empty();
             let handle = assets.add(asset);
             editor_state.open_project(handle, path, &mut dirty_state);
@@ -96,7 +96,7 @@ fn load_initial_project(
     if let Some(location) = &editor_data.cache.last_opened_project.clone() {
         let path = project_path(location);
         if path.exists() {
-            if let Some(asset) = load_project_from_path(&path) {
+            if let Ok(asset) = load_project_from_path(&path) {
                 let has_emitters = !asset.emitters.is_empty();
                 let handle = assets.add(asset);
                 editor_state.open_project(handle, path, &mut dirty_state);
@@ -117,7 +117,7 @@ fn load_initial_project(
         let demo_file = "examples/3d-explosion.ron";
         let demo_path = project_path(demo_file);
         if demo_path.exists() {
-            if let Some(asset) = load_project_from_path(&demo_path) {
+            if let Ok(asset) = load_project_from_path(&demo_path) {
                 let has_emitters = !asset.emitters.is_empty();
                 let handle = assets.add(asset);
                 editor_state.open_project(handle, demo_path, &mut dirty_state);

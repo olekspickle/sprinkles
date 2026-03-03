@@ -292,6 +292,7 @@ fn handle_trigger_click(
     for path_str in &editor_data.cache.recent_projects {
         let full_path = project_path(path_str);
         let name = load_project_from_path(&full_path)
+            .ok()
             .map(|asset| asset.name)
             .unwrap_or_else(|| {
                 full_path
