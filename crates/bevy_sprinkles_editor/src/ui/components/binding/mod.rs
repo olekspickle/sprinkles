@@ -329,8 +329,7 @@ impl FieldBinding {
         let path = ReflectPath::new(self.path());
         let value = match data.reflect_path(path.as_str()) {
             Ok(v) => v,
-            Err(e) => {
-                warn!("binding: failed to resolve '{}': {}", self.path(), e);
+            Err(_) => {
                 return None;
             }
         };
@@ -350,8 +349,7 @@ impl FieldBinding {
         let path = ReflectPath::new(self.path());
         let target = match data.reflect_path_mut(path.as_str()) {
             Ok(v) => v,
-            Err(e) => {
-                warn!("binding: failed to resolve_mut '{}': {}", self.path(), e);
+            Err(_) => {
                 return None;
             }
         };
