@@ -57,7 +57,6 @@ implemented in Sprinkles.
 
 - <kbd>⌘</kbd> + <kbd>Z</kbd> (undo/redo)
 - Reorder emitters and colliders via drag and drop
-- Better open project error messages (too vague)
 - In-editor docs
 - WASM build
 
