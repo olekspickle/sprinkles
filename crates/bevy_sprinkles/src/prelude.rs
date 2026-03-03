@@ -9,14 +9,15 @@ pub use crate::asset::{
     ParticleFlags, ParticleMesh, ParticleSystemAsset, ParticleSystemAuthors,
     ParticleSystemDimension, ParticlesColliderShape3D, QuadOrientation, Range as ParticleRange,
     RibbonTrailShape, SerializableAlphaMode, SerializableFace, SolidOrGradientColor,
-    StandardParticleMaterial, SubEmitterConfig, SubEmitterMode, TransformAlign,
+    SprinklesEditorData, StandardParticleMaterial, SubEmitterConfig, SubEmitterMode,
+    TransformAlign,
 };
 #[cfg(feature = "preset-textures")]
 pub use crate::textures::preset::PresetTexture;
 pub use crate::textures::preset::TextureRef;
 
 pub use crate::runtime::{
-    ColliderEntity, EmitterEntity, EmitterRuntime, Finished, ParticleMaterial,
+    ColliderEntity, EditorMode, EmitterEntity, EmitterRuntime, Finished, ParticleMaterial,
     ParticleMaterialHandle, ParticleSystem2D, ParticleSystem3D, ParticleSystemRuntime,
     ParticlesCollider3D, SubEmitterBufferHandle,
 };

@@ -260,6 +260,7 @@ pub fn spawn_preview_particle_system(
         },
         asset.initial_transform.to_transform(),
         Visibility::default(),
+        EditorMode,
         EditorParticlePreview,
         Name::new("Particle Preview"),
     ));

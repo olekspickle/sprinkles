@@ -146,20 +146,60 @@ pub enum TextureRef {
     /// A built-in preset texture. Only available with the `preset-textures` feature.
     #[cfg(feature = "preset-textures")]
     Preset(PresetTexture),
-    /// A texture loaded from the asset directory by path.
+    /// A texture loaded from the project's asset directory by relative path.
+    ///
+    /// At runtime, Bevy resolves this path from its own asset directory. In
+    /// [`EditorMode`](crate::runtime::EditorMode), the path is instead resolved
+    /// against the known asset folders stored in
+    /// [`SprinklesEditorData`](crate::asset::SprinklesEditorData).
     Asset(String),
-    /// A texture loaded from a local/relative path.
+    /// A texture loaded from an absolute path.
+    ///
+    /// *Note:* Bevy's `UnapprovedPathMode` will reject paths outside the asset
+    ///  directory by default. Prefer [`Asset`](Self::Asset) instead.
     Local(String),
 }
 
 impl TextureRef {
+    /// Resolves the filesystem path for this texture reference.
+    ///
+    /// For [`Asset`](Self::Asset) textures, each entry in `assets_folders` is
+    /// tried in order and the first path that exists on disk is returned.
+    /// Falls back to the relative path when no folder matches.
+    pub fn resolve_path(&self, assets_folders: &[String]) -> String {
+        match self {
+            #[cfg(feature = "preset-textures")]
+            Self::Preset(_) => String::new(),
+            Self::Asset(path) if !path.is_empty() => {
+                for folder in assets_folders {
+                    let full = format!("{folder}{path}");
+                    if std::path::Path::new(&full).exists() {
+                        return full;
+                    }
+                }
+                path.clone()
+            }
+            Self::Local(path) if !path.is_empty() => path.clone(),
+            _ => String::new(),
+        }
+    }
+
     /// Loads the referenced texture via the [`AssetServer`].
-    pub fn load(&self, asset_server: &AssetServer) -> Handle<Image> {
+    ///
+    /// Pass an empty `assets_folders` slice when loading from a game's own
+    /// asset directory where Bevy can resolve paths normally.
+    pub fn load(&self, asset_server: &AssetServer, assets_folders: &[String]) -> Handle<Image> {
         match self {
             #[cfg(feature = "preset-textures")]
             Self::Preset(preset) => asset_server.load(preset.embedded_path()),
-            Self::Local(path) | Self::Asset(path) if !path.is_empty() => asset_server.load(path),
-            _ => Handle::default(),
+            _ => {
+                let path = self.resolve_path(assets_folders);
+                if path.is_empty() {
+                    Handle::default()
+                } else {
+                    asset_server.load(path)
+                }
+            }
         }
     }
 }

@@ -482,8 +482,13 @@ impl Default for StandardParticleMaterial {
 impl StandardParticleMaterial {
     /// Converts this serializable material into a Bevy [`StandardMaterial`],
     /// loading any referenced textures via the provided [`AssetServer`].
-    pub fn to_standard_material(&self, asset_server: &AssetServer) -> StandardMaterial {
-        let load_tex = |tex: &Option<TextureRef>| tex.as_ref().map(|t| t.load(asset_server));
+    pub fn to_standard_material(
+        &self,
+        asset_server: &AssetServer,
+        assets_folders: &[String],
+    ) -> StandardMaterial {
+        let load_tex =
+            |tex: &Option<TextureRef>| tex.as_ref().map(|t| t.load(asset_server, assets_folders));
 
         StandardMaterial {
             base_color: color_from_array(self.base_color),

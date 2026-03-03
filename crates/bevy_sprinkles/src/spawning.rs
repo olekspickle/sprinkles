@@ -7,10 +7,10 @@ use crate::{
     material::{ParticleEmitterUniforms, ParticleMaterialExtension, TRAIL_THICKNESS_CURVE_SAMPLES},
     mesh::ParticleMeshCache,
     runtime::{
-        ColliderEntity, CurrentMaterialConfig, CurrentMeshConfig, EmitterEntity, EmitterRuntime,
-        ParticleBufferHandle, ParticleData, ParticleMaterial, ParticleMaterialHandle,
-        ParticleMeshHandle, ParticleSystem3D, ParticleSystemRuntime, ParticlesCollider3D,
-        SimulationStep, SubEmitterBufferHandle, TrailHistoryEntry,
+        ColliderEntity, CurrentMaterialConfig, CurrentMeshConfig, EditorMode, EmitterEntity,
+        EmitterRuntime, ParticleBufferHandle, ParticleData, ParticleMaterial,
+        ParticleMaterialHandle, ParticleMeshHandle, ParticleSystem3D, ParticleSystemRuntime,
+        ParticlesCollider3D, SimulationStep, SubEmitterBufferHandle, TrailHistoryEntry,
     },
 };
 
@@ -61,6 +61,20 @@ fn get_emitter_data<'a>(
 ) -> Option<&'a EmitterData> {
     get_particle_asset(parent_system, particle_systems, assets)
         .and_then(|asset| asset.emitters.get(emitter_index))
+}
+
+fn get_editor_assets_folders<'a>(
+    parent_system: Entity,
+    is_editor: bool,
+    particle_systems: &Query<&ParticleSystem3D>,
+    assets: &'a Assets<ParticleSystemAsset>,
+) -> &'a [String] {
+    if !is_editor {
+        return &[];
+    }
+    get_particle_asset(parent_system, particle_systems, assets)
+        .map(|a| a.sprinkles_editor.assets_folder.as_slice())
+        .unwrap_or(&[])
 }
 
 pub fn update_particle_time(
@@ -198,9 +212,10 @@ fn create_particle_material_from_config(
     sorted_particles_buffer: Handle<ShaderStorageBuffer>,
     emitter_uniforms_buffer: Handle<ShaderStorageBuffer>,
     asset_server: &AssetServer,
+    assets_folders: &[String],
 ) -> ParticleMaterial {
     let base = match config {
-        DrawPassMaterial::Standard(mat) => mat.to_standard_material(asset_server),
+        DrawPassMaterial::Standard(mat) => mat.to_standard_material(asset_server, assets_folders),
         DrawPassMaterial::CustomShader { .. } => {
             todo!("custom shader support not yet implemented")
         }
@@ -228,7 +243,7 @@ fn bake_thickness_curve(trail: &EmitterTrail) -> [f32; TRAIL_THICKNESS_CURVE_SAM
 
 pub fn setup_particle_systems(
     mut commands: Commands,
-    query: Query<(Entity, &ParticleSystem3D), Without<ParticleSystemRuntime>>,
+    query: Query<(Entity, &ParticleSystem3D, Has<EditorMode>), Without<ParticleSystemRuntime>>,
     assets: Res<Assets<ParticleSystemAsset>>,
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -236,7 +251,7 @@ pub fn setup_particle_systems(
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
     mut materials: ResMut<Assets<ParticleMaterial>>,
 ) {
-    for (system_entity, particle_system) in query.iter() {
+    for (system_entity, particle_system, is_editor) in query.iter() {
         let Some(asset) = assets.get(&particle_system.handle) else {
             continue;
         };
@@ -244,6 +259,12 @@ pub fn setup_particle_systems(
         if asset.emitters.is_empty() {
             continue;
         }
+
+        let assets_folders = if is_editor {
+            asset.sprinkles_editor.assets_folder.as_slice()
+        } else {
+            &[]
+        };
 
         commands
             .entity(system_entity)
@@ -297,6 +318,7 @@ pub fn setup_particle_systems(
                 sorted_particles_buffer_handle.clone(),
                 emitter_uniforms_buffer_handle.clone(),
                 &asset_server,
+                assets_folders,
             ));
 
             let mut runtime = EmitterRuntime::new(emitter_index, emitter.time.fixed_seed);
@@ -475,6 +497,7 @@ pub fn sync_particle_mesh(
 
 pub(crate) fn sync_particle_buffers(
     particle_systems: Query<&ParticleSystem3D>,
+    editor_modes: Query<Has<EditorMode>>,
     mut emitter_query: Query<(
         &EmitterEntity,
         &mut EmitterRuntime,
@@ -561,11 +584,16 @@ pub(crate) fn sync_particle_buffers(
         runtime.trail_history_write_index = 0;
         runtime.trail_history_frames = new_trail_history_frames;
 
+        let is_editor = editor_modes.get(emitter.parent_system).unwrap_or(false);
+        let assets_folders =
+            get_editor_assets_folders(emitter.parent_system, is_editor, &particle_systems, &assets);
+
         let new_material = materials.add(create_particle_material_from_config(
             &emitter_data.draw_pass.material,
             new_sorted_buf,
             new_uniforms_buf,
             &asset_server,
+            assets_folders,
         ));
         material3d.0 = new_material.clone();
         material_handle.0 = new_material;
@@ -621,6 +649,7 @@ pub fn write_emitter_uniforms(
 
 pub fn sync_particle_material(
     particle_systems: Query<&ParticleSystem3D>,
+    editor_modes: Query<Has<EditorMode>>,
     mut emitter_query: Query<(
         &EmitterEntity,
         &EmitterRuntime,
@@ -657,11 +686,20 @@ pub fn sync_particle_material(
                 )
             };
 
+            let is_editor = editor_modes.get(emitter.parent_system).unwrap_or(false);
+            let assets_folders = get_editor_assets_folders(
+                emitter.parent_system,
+                is_editor,
+                &particle_systems,
+                &assets,
+            );
+
             let new_material_handle = materials.add(create_particle_material_from_config(
                 &new_material,
                 sorted_particles_handle,
                 emitter_uniforms_handle,
                 &asset_server,
+                assets_folders,
             ));
 
             material3d.0 = new_material_handle.clone();

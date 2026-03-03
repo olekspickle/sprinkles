@@ -1327,6 +1327,25 @@ pub enum RibbonTrailShape {
     Cross,
 }
 
+/// Editor-specific metadata.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Reflect)]
+pub struct SprinklesEditorData {
+    /// Known asset folder paths for resolving [`TextureRef::Asset`] references.
+    ///
+    /// Multiple entries allow different users or devices to open the same
+    /// project from different locations. At load time the first path that
+    /// exists on disk is used.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assets_folder: Vec<String>,
+}
+
+impl SprinklesEditorData {
+    /// Returns `true` if no editor metadata has been recorded.
+    pub fn is_empty(&self) -> bool {
+        self.assets_folder.is_empty()
+    }
+}
+
 /// Attribution information for a particle system.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Reflect)]
 pub struct ParticleSystemAuthors {
@@ -1376,6 +1395,9 @@ pub struct ParticleSystemAsset {
     /// Attribution information.
     #[serde(default, skip_serializing_if = "ParticleSystemAuthors::is_empty")]
     pub authors: ParticleSystemAuthors,
+    /// Editor-specific metadata.
+    #[serde(default, skip_serializing_if = "SprinklesEditorData::is_empty")]
+    pub sprinkles_editor: SprinklesEditorData,
 }
 
 impl ParticleSystemAsset {
@@ -1398,6 +1420,7 @@ impl ParticleSystemAsset {
             colliders,
             despawn_on_finish,
             authors,
+            sprinkles_editor: SprinklesEditorData::default(),
         }
     }
 

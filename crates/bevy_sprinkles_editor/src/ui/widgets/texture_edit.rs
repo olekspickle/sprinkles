@@ -159,6 +159,13 @@ fn setup_texture_content(
                 current_variant: variant,
             });
 
+        let assets_folders = editor_state
+            .current_project
+            .as_ref()
+            .and_then(|h| p_assets.get(h))
+            .map(|a| a.sprinkles_editor.assets_folder.as_slice())
+            .unwrap_or(&[]);
+
         spawn_content_for_variant(
             &mut commands,
             container_entity,
@@ -166,6 +173,7 @@ fn setup_texture_content(
             variant,
             current_texture.as_ref(),
             &asset_server,
+            assets_folders,
         );
     }
 }
@@ -217,6 +225,13 @@ fn respawn_texture_content_on_switch(
                 &configs,
             );
 
+            let assets_folders = editor_state
+                .current_project
+                .as_ref()
+                .and_then(|h| p_assets.get(h))
+                .map(|a| a.sprinkles_editor.assets_folder.as_slice())
+                .unwrap_or(&[]);
+
             spawn_content_for_variant(
                 &mut commands,
                 container_entity,
@@ -224,6 +239,7 @@ fn respawn_texture_content_on_switch(
                 variant,
                 current_texture.as_ref(),
                 &asset_server,
+                assets_folders,
             );
 
             break;
@@ -238,6 +254,7 @@ fn spawn_content_for_variant(
     variant: TextureVariant,
     current_texture: Option<&TextureRef>,
     asset_server: &AssetServer,
+    assets_folders: &[String],
 ) {
     match variant {
         TextureVariant::None => {}
@@ -261,6 +278,7 @@ fn spawn_content_for_variant(
                 variant_edit,
                 current_texture,
                 asset_server,
+                assets_folders,
             );
         }
     }
@@ -453,6 +471,7 @@ fn spawn_file_content(
     variant_edit: Entity,
     current_texture: Option<&TextureRef>,
     asset_server: &AssetServer,
+    assets_folders: &[String],
 ) {
     let font: Handle<Font> = asset_server.load(FONT_PATH);
 
@@ -497,18 +516,21 @@ fn spawn_file_content(
             BorderColor::all(BORDER_COLOR),
         ))
         .id();
-    if let Some(path) = texture_path {
-        let image = commands
-            .spawn((
-                ImageNode::new(asset_server.load(path.to_owned())),
-                Node {
-                    width: percent(100),
-                    height: percent(100),
-                    ..default()
-                },
-            ))
-            .id();
-        commands.entity(preview).add_child(image);
+    if let Some(tex) = current_texture {
+        let resolved = tex.resolve_path(assets_folders);
+        if !resolved.is_empty() {
+            let image = commands
+                .spawn((
+                    ImageNode::new(asset_server.load(resolved)),
+                    Node {
+                        width: percent(100),
+                        height: percent(100),
+                        ..default()
+                    },
+                ))
+                .id();
+            commands.entity(preview).add_child(image);
+        }
     }
     commands.entity(preview_wrapper).add_child(preview);
 
@@ -692,6 +714,8 @@ fn handle_select_file_click(
 fn poll_texture_file_pick(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    editor_state: Res<EditorState>,
+    mut particle_assets: ResMut<Assets<ParticleSystemAsset>>,
     pick_result: Option<Res<TextureFilePickResult>>,
     mut configs: Query<&mut VariantEditConfig, With<EditorVariantEdit>>,
     preview_images: Query<(Entity, &TexturePreviewImage, Option<&Children>)>,
@@ -718,13 +742,17 @@ fn poll_texture_file_pick(
     commands.remove_resource::<TextureFilePickResult>();
 
     let path_str = path.to_string_lossy().to_string();
-    let texture_ref = classify_texture_path(&path_str);
+    let (texture_ref, assets_folder) = classify_texture_path(&path_str);
 
-    let load_path = match &texture_ref {
-        TextureRef::Asset(p) => p.clone(),
-        TextureRef::Local(p) => p.clone(),
-        _ => String::new(),
-    };
+    if let Some(folder) = assets_folder {
+        if let Some(handle) = &editor_state.current_project {
+            if let Some(asset) = particle_assets.get_mut(handle) {
+                if !asset.sprinkles_editor.assets_folder.contains(&folder) {
+                    asset.sprinkles_editor.assets_folder.push(folder);
+                }
+            }
+        }
+    }
 
     for (entity, preview, children) in &preview_images {
         if preview.0 != variant_edit {
@@ -735,10 +763,10 @@ fn poll_texture_file_pick(
                 commands.entity(child).try_despawn();
             }
         }
-        if !load_path.is_empty() {
+        if !path_str.is_empty() {
             let image = commands
                 .spawn((
-                    ImageNode::new(asset_server.load(load_path.clone())),
+                    ImageNode::new(asset_server.load(path_str.clone())),
                     Node {
                         width: percent(100),
                         height: percent(100),
@@ -836,13 +864,14 @@ fn format_display_path(path: &str) -> String {
 }
 
 // TODO: `/data/assets/src-backup/` would be wrongly classified
-fn classify_texture_path(path: &str) -> TextureRef {
+fn classify_texture_path(path: &str) -> (TextureRef, Option<String>) {
     if let Some(assets_pos) = path.find("/assets/") {
         let before = &path[..assets_pos];
         if !before.contains("/src/") {
             let relative = &path[assets_pos + "/assets/".len()..];
-            return TextureRef::Asset(relative.to_string());
+            let folder = path[..assets_pos + "/assets/".len()].to_string();
+            return (TextureRef::Asset(relative.to_string()), Some(folder));
         }
     }
-    TextureRef::Local(path.to_string())
+    (TextureRef::Local(path.to_string()), None)
 }

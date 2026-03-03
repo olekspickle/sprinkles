@@ -71,6 +71,10 @@ impl ParticleData {
 #[derive(EntityEvent)]
 pub struct Finished(pub Entity);
 
+/// Marker component indicating this particle system is running inside an editor.
+#[derive(Component)]
+pub struct EditorMode;
+
 /// Runtime state for a particle system entity, controlling playback.
 #[derive(Component)]
 pub struct ParticleSystemRuntime {
