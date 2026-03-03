@@ -85,13 +85,14 @@ Documentation is available at [docs.rs](https://docs.rs/bevy_sprinkles/latest/be
 
 ## Features
 
-- GPU particle simulation and sorting
+- GPU particle simulation & sorting
 - Fully fledged built-in visual editor
 - 3D support (2D is planned)
 - PBR material support (custom shaders is planned)
+- Automatic GPU instancing across emitters & systems
 - Particle collision
 - Curl noise turbulence
-- Billboard and velocity-aligned transform modes
+- Billboard & velocity-aligned transform modes
 - Sub-emitters
 
 ## Acknowledgements
