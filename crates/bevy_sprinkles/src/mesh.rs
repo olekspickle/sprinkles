@@ -652,7 +652,8 @@ fn build_particle_mesh(
     particle_count: u32,
     meshes: &mut Assets<Mesh>,
 ) -> Handle<Mesh> {
-    let base_mesh = create_base_mesh(config);
+    let mut base_mesh = create_base_mesh(config);
+    let _ = base_mesh.generate_tangents();
     let trail = config.is_trail();
 
     let base_positions: Vec<[f32; 3]> =
@@ -660,6 +661,13 @@ fn build_particle_mesh(
 
     let base_normals: Vec<[f32; 3]> = extract_float32x3(&base_mesh, Mesh::ATTRIBUTE_NORMAL)
         .unwrap_or_else(|| vec![[0.0, 0.0, 1.0]; base_positions.len()]);
+
+    let base_tangents: Option<Vec<[f32; 4]>> = base_mesh
+        .attribute(Mesh::ATTRIBUTE_TANGENT)
+        .and_then(|attr| match attr {
+            VertexAttributeValues::Float32x4(v) => Some(v.clone()),
+            _ => None,
+        });
 
     let base_uvs: Vec<[f32; 2]> = base_mesh
         .attribute(Mesh::ATTRIBUTE_UV_0)
@@ -693,6 +701,11 @@ fn build_particle_mesh(
 
     let mut positions: Vec<[f32; 3]> = Vec::with_capacity(total_vertices);
     let mut normals: Vec<[f32; 3]> = Vec::with_capacity(total_vertices);
+    let mut tangents: Vec<[f32; 4]> = if base_tangents.is_some() {
+        Vec::with_capacity(total_vertices)
+    } else {
+        Vec::new()
+    };
     let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(total_vertices);
     let mut uv_bs: Vec<[f32; 2]> = Vec::with_capacity(total_vertices);
     let mut indices: Vec<u32> = Vec::with_capacity(total_indices);
@@ -704,6 +717,9 @@ fn build_particle_mesh(
         for i in 0..vertices_per_mesh {
             positions.push(base_positions[i]);
             normals.push(base_normals[i]);
+            if let Some(ref bt) = base_tangents {
+                tangents.push(bt[i]);
+            }
             uvs.push(base_uvs[i]);
             let trail_v = base_uv_bs.as_ref().map_or(0.0, |b| b[i][1]);
             uv_bs.push([particle_index_f32, trail_v]);
@@ -720,6 +736,9 @@ fn build_particle_mesh(
     );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    if !tangents.is_empty() {
+        mesh.insert_attribute(Mesh::ATTRIBUTE_TANGENT, tangents);
+    }
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, uv_bs);
     mesh.insert_indices(Indices::U32(indices));

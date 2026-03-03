@@ -94,10 +94,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.uv_b = vertex.uv_b;
 #endif
 
-#ifdef VERTEX_TANGENTS
-    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vertex.tangent, vertex.instance_index);
-#endif
-
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     out.instance_index = vertex.instance_index;
 #endif
@@ -194,6 +190,15 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         }
 #endif
 
+#ifdef VERTEX_TANGENTS
+        let rotated_tangent_trail = orient * vertex.tangent.xyz;
+        if (is_local) {
+            out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vec4(rotated_tangent_trail, vertex.tangent.w), vertex.instance_index);
+        } else {
+            out.world_tangent = vec4(rotated_tangent_trail, vertex.tangent.w);
+        }
+#endif
+
 #ifdef VERTEX_COLORS
         let color_lo = sorted_particles[idx_lo].color;
         let color_hi = sorted_particles[idx_hi].color;
@@ -216,6 +221,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 #ifdef VERTEX_NORMALS
     var rotated_normal = vertex.normal;
 #endif
+#ifdef VERTEX_TANGENTS
+    var rotated_tangent = vertex.tangent.xyz;
+#endif
 
     let transform_align = emitter_uniforms.transform_align;
 
@@ -227,6 +235,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
             rotated_position = rotation_matrix * vertex.position;
 #ifdef VERTEX_NORMALS
             rotated_normal = rotation_matrix * vertex.normal;
+#endif
+#ifdef VERTEX_TANGENTS
+            rotated_tangent = rotation_matrix * vertex.tangent.xyz;
 #endif
         }
     }
@@ -246,6 +257,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 #ifdef VERTEX_NORMALS
             rotated_normal = angle_matrix * rotated_normal;
 #endif
+#ifdef VERTEX_TANGENTS
+            rotated_tangent = angle_matrix * rotated_tangent;
+#endif
         } else {
             let angle_matrix = mat3x3<f32>(
                 vec3(cos_a, sin_a, 0.0),
@@ -255,6 +269,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
             rotated_position = angle_matrix * rotated_position;
 #ifdef VERTEX_NORMALS
             rotated_normal = angle_matrix * rotated_normal;
+#endif
+#ifdef VERTEX_TANGENTS
+            rotated_tangent = angle_matrix * rotated_tangent;
 #endif
         }
     }
@@ -312,6 +329,12 @@ fn vertex(vertex: Vertex) -> VertexOutput {
                 + sv * rotated_normal.y
                 + cam_forward * rotated_normal.z;
 #endif
+#ifdef VERTEX_TANGENTS
+            out.world_tangent = vec4(
+                right * rotated_tangent.x + sv * rotated_tangent.y + cam_forward * rotated_tangent.z,
+                vertex.tangent.w
+            );
+#endif
         } else if transform_align == TRANSFORM_ALIGN_BILLBOARD_FIXED_Y {
             // y-axis locked to world up, rotates around vertical axis to face camera
             let world_up = vec3(0.0, 1.0, 0.0);
@@ -332,6 +355,12 @@ fn vertex(vertex: Vertex) -> VertexOutput {
                 + world_up * rotated_normal.y
                 + forward * rotated_normal.z;
 #endif
+#ifdef VERTEX_TANGENTS
+            out.world_tangent = vec4(
+                right * rotated_tangent.x + world_up * rotated_tangent.y + forward * rotated_tangent.z,
+                vertex.tangent.w
+            );
+#endif
         } else {
             // standard billboard
             let scaled_vertex = rotated_position * scale;
@@ -347,6 +376,12 @@ fn vertex(vertex: Vertex) -> VertexOutput {
             out.world_normal = cam_right * rotated_normal.x
                 + cam_up * rotated_normal.y
                 + cam_forward * rotated_normal.z;
+#endif
+#ifdef VERTEX_TANGENTS
+            out.world_tangent = vec4(
+                cam_right * rotated_tangent.x + cam_up * rotated_tangent.y + cam_forward * rotated_tangent.z,
+                vertex.tangent.w
+            );
 #endif
         }
     } else {
@@ -373,6 +408,13 @@ fn vertex(vertex: Vertex) -> VertexOutput {
             out.world_normal = mesh_functions::mesh_normal_local_to_world(rotated_normal, vertex.instance_index);
         } else {
             out.world_normal = emitter_rotation * rotated_normal;
+        }
+#endif
+#ifdef VERTEX_TANGENTS
+        if is_local {
+            out.world_tangent = mesh_functions::mesh_tangent_local_to_world(world_from_local, vec4(rotated_tangent, vertex.tangent.w), vertex.instance_index);
+        } else {
+            out.world_tangent = vec4(emitter_rotation * rotated_tangent, vertex.tangent.w);
         }
 #endif
     }
