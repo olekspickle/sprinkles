@@ -139,6 +139,10 @@ pub fn examples_dir() -> PathBuf {
     data_dir().join("examples")
 }
 
+pub fn is_example_path(path: &std::path::Path) -> bool {
+    path.starts_with(examples_dir())
+}
+
 pub fn working_dir() -> PathBuf {
     env::current_dir().unwrap_or_default()
 }

@@ -9,7 +9,7 @@ use bevy_sprinkles::asset::versioning::VersionStatus;
 use bevy_sprinkles::prelude::*;
 use inflector::Inflector;
 
-use crate::io::{EditorData, project_path, projects_dir, save_editor_data};
+use crate::io::{EditorData, is_example_path, project_path, projects_dir, save_editor_data};
 use crate::state::{DirtyState, EditorState, Inspectable, Inspecting};
 use crate::ui::components::toasts::ToastEvent;
 use crate::utils::simplify_path;
@@ -85,6 +85,7 @@ fn on_open_project_event(
 ) {
     let location = &event.0;
     let path = project_path(location);
+    let is_example = is_example_path(&path);
 
     let Some(mut asset) = load_project_from_path(&path) else {
         commands.trigger(ToastEvent::error(format!(
@@ -132,8 +133,10 @@ fn on_open_project_event(
         None
     };
 
-    editor_data.cache.add_recent_project(location.clone());
-    save_editor_data(&editor_data);
+    if !is_example {
+        editor_data.cache.add_recent_project(location.clone());
+        save_editor_data(&editor_data);
+    }
 }
 
 fn on_browse_open_project_event(_event: On<BrowseOpenProjectEvent>, mut commands: Commands) {

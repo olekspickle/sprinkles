@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_sprinkles::prelude::*;
 
-use crate::io::examples_dir;
+use crate::io::is_example_path;
 use crate::ui::icons::{ICON_FILE, ICON_NODE_TREE, ICON_SETTINGS};
 
 pub fn plugin(app: &mut App) {
@@ -29,7 +29,7 @@ impl EditorState {
         path: PathBuf,
         dirty_state: &mut DirtyState,
     ) {
-        let is_example = path.starts_with(examples_dir());
+        let is_example = is_example_path(&path);
         self.current_project = Some(handle);
         self.current_project_path = if is_example { None } else { Some(path) };
         dirty_state.has_unsaved_changes = is_example;
