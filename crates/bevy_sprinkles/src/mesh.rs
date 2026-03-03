@@ -410,13 +410,11 @@ fn create_tube_trail_mesh(
     radius: f32,
     radial_steps: u32,
     sections: u32,
-    section_length: f32,
     section_rings: u32,
 ) -> Mesh {
     let radial_steps = radial_steps.max(3);
     let sections = sections.max(2);
     let total_rings = sections * section_rings.max(1);
-    let total_length = sections as f32 * section_length;
 
     let mut positions: Vec<[f32; 3]> = Vec::new();
     let mut normals: Vec<[f32; 3]> = Vec::new();
@@ -426,14 +424,12 @@ fn create_tube_trail_mesh(
 
     for ring in 0..=total_rings {
         let section_frac = ring as f32 / total_rings as f32;
-        let y = -section_frac * total_length;
-
         for segment in 0..=radial_steps {
             let u = segment as f32 / radial_steps as f32;
             let theta = u * std::f32::consts::TAU;
             let (sin_theta, cos_theta) = theta.sin_cos();
 
-            positions.push([cos_theta * radius, y, sin_theta * radius]);
+            positions.push([cos_theta * radius, -section_frac, sin_theta * radius]);
             normals.push([cos_theta, 0.0, sin_theta]);
             uvs.push([u, section_frac]);
             uv_bs.push([0.0, section_frac]);
@@ -498,14 +494,11 @@ fn create_tube_trail_mesh(
 fn create_ribbon_trail_mesh(
     size: f32,
     sections: u32,
-    section_length: f32,
-    section_segments: u32,
     section_rings: u32,
     shape: RibbonTrailShape,
 ) -> Mesh {
     let sections = sections.max(2);
-    let total_subdivs = sections * section_segments.max(1) * section_rings.max(1);
-    let total_length = sections as f32 * section_length;
+    let total_subdivs = sections * section_rings.max(1);
 
     let strip_offsets: Vec<[f32; 2]> = match shape {
         RibbonTrailShape::Flat => vec![[1.0, 0.0]],
@@ -529,14 +522,13 @@ fn create_ribbon_trail_mesh(
 
         for row in 0..=total_subdivs {
             let section_frac = row as f32 / total_subdivs as f32;
-            let y = -section_frac * total_length;
 
-            positions.push([-size * offsets[0], y, -size * offsets[1]]);
+            positions.push([-size * offsets[0], -section_frac, -size * offsets[1]]);
             normals.push(normal);
             uvs.push([0.0, section_frac]);
             uv_bs.push([0.0, section_frac]);
 
-            positions.push([size * offsets[0], y, size * offsets[1]]);
+            positions.push([size * offsets[0], -section_frac, size * offsets[1]]);
             normals.push(normal);
             uvs.push([1.0, section_frac]);
             uv_bs.push([0.0, section_frac]);
@@ -644,30 +636,14 @@ fn create_base_mesh(config: &ParticleMesh) -> Mesh {
             radius,
             radial_steps,
             sections,
-            section_length,
             section_rings,
-        } => create_tube_trail_mesh(
-            *radius,
-            *radial_steps,
-            *sections,
-            *section_length,
-            *section_rings,
-        ),
+        } => create_tube_trail_mesh(*radius, *radial_steps, *sections, *section_rings),
         ParticleMesh::RibbonTrail {
             size,
             sections,
-            section_length,
-            section_segments,
             section_rings,
             shape,
-        } => create_ribbon_trail_mesh(
-            *size,
-            *sections,
-            *section_length,
-            *section_segments,
-            *section_rings,
-            *shape,
-        ),
+        } => create_ribbon_trail_mesh(*size, *sections, *section_rings, *shape),
     }
 }
 

@@ -16,10 +16,8 @@
             draw_pass: (
                 mesh: RibbonTrail(
                     size: 0.1,
-                    sections: 5,
-                    section_length: 0.2,
-                    section_segments: 5,
-                    section_rings: 1,
+                    sections: 20,
+                    section_rings: 20,
                     shape: Flat,
                 ),
                 material: Standard((
@@ -209,8 +207,6 @@
             trail: (
                 enabled: true,
                 stretch_time: 0.3,
-                sections: 8,
-                section_length: 0.2,
             ),
             particle_flags: "",
         ),

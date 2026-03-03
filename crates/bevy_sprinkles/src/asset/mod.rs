@@ -521,8 +521,6 @@ pub enum ParticleMesh {
         radial_steps: u32,
         /// Number of trail sections along the tube length. Defaults to `8`.
         sections: u32,
-        /// Length of each trail section. Defaults to `0.2`.
-        section_length: f32,
         /// Number of ring subdivisions within each section. Defaults to `1`.
         #[serde(default = "default_section_rings")]
         section_rings: u32,
@@ -533,10 +531,6 @@ pub enum ParticleMesh {
         size: f32,
         /// Number of trail sections along the ribbon length. Defaults to `8`.
         sections: u32,
-        /// Length of each trail section. Defaults to `0.2`.
-        section_length: f32,
-        /// Number of subdivisions within each section for smoother curves. Defaults to `3`.
-        section_segments: u32,
         /// Number of ring subdivisions within each section. Defaults to `1`.
         #[serde(default = "default_section_rings")]
         section_rings: u32,
@@ -656,27 +650,21 @@ impl std::hash::Hash for ParticleMesh {
                 radius,
                 radial_steps,
                 sections,
-                section_length,
                 section_rings,
             } => {
                 radius.to_bits().hash(hasher);
                 radial_steps.hash(hasher);
                 sections.hash(hasher);
-                section_length.to_bits().hash(hasher);
                 section_rings.hash(hasher);
             }
             Self::RibbonTrail {
                 size,
                 sections,
-                section_length,
-                section_segments,
                 section_rings,
                 shape,
             } => {
                 size.to_bits().hash(hasher);
                 sections.hash(hasher);
-                section_length.to_bits().hash(hasher);
-                section_segments.hash(hasher);
                 section_rings.hash(hasher);
                 shape.hash(hasher);
             }

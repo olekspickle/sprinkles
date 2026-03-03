@@ -164,14 +164,12 @@ fn mesh_variants() -> Vec<VariantDefinition> {
                 .icon(ICON_MESH_CYLINDER)
                 .override_rows(vec![
                     vec!["radius", "radial_steps"],
-                    vec!["sections", "section_length"],
-                    vec!["section_rings"],
+                    vec!["sections", "section_rings"],
                 ])
                 .default_value(ParticleMesh::TubeTrail {
                     radius: 0.5,
                     radial_steps: 8,
                     sections: 8,
-                    section_length: 0.2,
                     section_rings: 1,
                 }),
         ),
@@ -182,15 +180,12 @@ fn mesh_variants() -> Vec<VariantDefinition> {
                 .override_combobox::<RibbonTrailShape>("shape")
                 .override_rows(vec![
                     vec!["size"],
-                    vec!["sections", "section_length"],
-                    vec!["section_segments", "section_rings"],
+                    vec!["sections", "section_rings"],
                     vec!["shape"],
                 ])
                 .default_value(ParticleMesh::RibbonTrail {
                     size: 1.0,
                     sections: 8,
-                    section_length: 0.2,
-                    section_segments: 3,
                     section_rings: 1,
                     shape: RibbonTrailShape::default(),
                 }),
