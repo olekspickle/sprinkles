@@ -5,7 +5,6 @@ use thiserror::Error;
 
 use super::ParticleSystemAsset;
 
-/// The current asset format version.
 const CURRENT_FORMAT_VERSION: &str = "0.2";
 
 /// Returns the current asset format version string.
@@ -29,16 +28,15 @@ pub enum MigrationError {
     UnknownVersion(String),
 }
 
-/// The result of migrating a particle system asset from an older format version.
+/// The result of a [`migrate`] call.
 pub struct MigrationResult {
-    /// The migrated asset, always in the current format version.
+    /// The particle system asset in the current format version.
     pub asset: ParticleSystemAsset,
     /// Whether the asset was migrated from an older version.
     pub was_migrated: bool,
 }
 
-/// Migrates a RON-encoded particle system asset from any known format version
-/// to the current version.
+/// Migrates a RON-encoded particle system asset to the current format version.
 pub fn migrate(bytes: &[u8]) -> Result<MigrationResult, MigrationError> {
     let probe: VersionProbe = ron::de::from_bytes(bytes)?;
     let current = current_format_version();
@@ -63,8 +61,7 @@ pub fn migrate(bytes: &[u8]) -> Result<MigrationResult, MigrationError> {
     }
 }
 
-/// Migrates a RON string. Convenience wrapper around [`migrate`] for callers
-/// that have the asset as a `&str` rather than `&[u8]`.
+/// Migrates a RON-encoded particle system asset from a string.
 pub fn migrate_str(ron: &str) -> Result<MigrationResult, MigrationError> {
     migrate(ron.as_bytes())
 }
