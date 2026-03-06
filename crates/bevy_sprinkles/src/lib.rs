@@ -14,7 +14,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! bevy_sprinkles = "0.1"
+//! bevy_sprinkles = "0.2"
 //! ```
 //!
 //! ## Add the plugin
