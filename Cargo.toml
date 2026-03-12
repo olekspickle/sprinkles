@@ -20,6 +20,7 @@ bevy = { version = "0.18.0", default-features = false, features = [
     "3d_bevy_render",
     "ui_api",
     "ui_bevy_render",
+    "picking",
     "file_watcher",
     # "reflect_auto_register",
 ] }
