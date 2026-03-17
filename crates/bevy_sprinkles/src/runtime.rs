@@ -51,6 +51,8 @@ pub struct ParticleData {
     pub alignment_dir: [f32; 4],
     /// Reference "up" direction for parallel-transported velocity alignment.
     pub ref_up: [f32; 4],
+    /// Per-axis rotation angles in radians (x, y, z).
+    pub angles: [f32; 4],
 }
 
 impl ParticleData {

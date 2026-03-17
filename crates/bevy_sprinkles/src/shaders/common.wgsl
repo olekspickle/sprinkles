@@ -5,8 +5,9 @@ struct Particle {
     velocity: vec4<f32>,       // xyz, lifetime
     color: vec4<f32>,
     custom: vec4<f32>,         // age, spawn_index, seed, flags
-    alignment_dir: vec4<f32>,  // xyz direction for ALIGN_Y_TO_VELOCITY, w = angle (radians)
+    alignment_dir: vec4<f32>,  // xyz direction for ALIGN_Y_TO_VELOCITY, w unused
     ref_up: vec4<f32>,         // xyz reference up for parallel-transported alignment
+    angles: vec4<f32>,         // xyz = per-axis rotation angles in radians
 }
 
 const TRAIL_THICKNESS_CURVE_SAMPLES: u32 = 16u;
@@ -38,6 +39,7 @@ const PARTICLE_FLAG_ACTIVE: u32 = 1u;
 // emitter-level particle flags (from EmitterParams.particle_flags)
 const EMITTER_FLAG_ROTATE_Y: u32 = 2u;
 const EMITTER_FLAG_DISABLE_Z: u32 = 4u;
+const EMITTER_FLAG_ANGLE_PER_AXIS: u32 = 8u;
 
 // transform align mode values
 const TRANSFORM_ALIGN_DISABLED: u32 = 0u;

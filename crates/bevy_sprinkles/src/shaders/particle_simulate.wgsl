@@ -5,7 +5,9 @@
     SubEmissionEntry,
     TrailHistoryEntry,
     PARTICLE_FLAG_ACTIVE,
+    EMITTER_FLAG_ROTATE_Y,
     EMITTER_FLAG_DISABLE_Z,
+    EMITTER_FLAG_ANGLE_PER_AXIS,
     EMISSION_FLAG_HAS_POSITION,
     EMISSION_FLAG_HAS_VELOCITY,
     SUB_EMITTER_MODE_DISABLED,
@@ -633,22 +635,31 @@ fn get_initial_angular_velocity(seed: u32) -> f32 {
     return mix(params.angular_velocity.min, params.angular_velocity.max, t);
 }
 
-// computes the final angle in radians from initial angle, angular velocity,
-// and lifetime curves
-fn compute_angle(seed: u32, age: f32, lifetime: f32) -> f32 {
+fn compute_angles(seed: u32, age: f32, lifetime: f32) -> vec3<f32> {
     let lifetime_frac = clamp(age / lifetime, 0.0, 1.0);
+    let base_angle = get_initial_angle(seed);
+    let is_per_axis = (params.particle_flags & EMITTER_FLAG_ANGLE_PER_AXIS) != 0u;
 
-    var base_angle = get_initial_angle(seed);
+    var angles = vec3(base_angle);
 
-    // curve applies as a multiplier to the initial angle
     if (params.angle_over_lifetime.enabled != 0u) {
-        let curve_value = sample_spline_curve(
-            angle_over_lifetime_texture,
-            angle_over_lifetime_sampler,
-            params.angle_over_lifetime,
-            lifetime_frac
-        );
-        base_angle *= curve_value;
+        if (is_per_axis) {
+            let curve_xyz = sample_spline_curve_xyz(
+                angle_over_lifetime_texture,
+                angle_over_lifetime_sampler,
+                params.angle_over_lifetime,
+                lifetime_frac
+            );
+            angles = vec3(base_angle) * curve_xyz;
+        } else {
+            let curve_value = sample_spline_curve(
+                angle_over_lifetime_texture,
+                angle_over_lifetime_sampler,
+                params.angle_over_lifetime,
+                lifetime_frac
+            );
+            angles = vec3(base_angle * curve_value);
+        }
     }
 
     let angular_vel = get_initial_angular_velocity(seed + 1u);
@@ -660,13 +671,24 @@ fn compute_angle(seed: u32, age: f32, lifetime: f32) -> f32 {
                 params.angular_velocity.curve,
                 lifetime_frac
             );
-            base_angle += age * angular_vel * vel_curve;
+            angles += vec3(age * angular_vel * vel_curve);
         } else {
-            base_angle += age * angular_vel;
+            angles += vec3(age * angular_vel);
         }
     }
 
-    return radians(base_angle);
+    var result = radians(angles);
+
+    if (!is_per_axis) {
+        let single_angle = result.x;
+        if (params.particle_flags & EMITTER_FLAG_ROTATE_Y) != 0u {
+            result = vec3(0.0, single_angle, 0.0);
+        } else {
+            result = vec3(0.0, 0.0, single_angle);
+        }
+    }
+
+    return result;
 }
 
 // 3d noise / turbulence functions
@@ -1328,15 +1350,14 @@ fn spawn_particle(idx: u32) -> Particle {
     }
     p.custom = vec4(0.0, spawn_index, bitcast<f32>(seed), bitcast<f32>(PARTICLE_FLAG_ACTIVE));
 
-    let angle = compute_angle(seed + 70u, 0.0, lifetime);
+    p.angles = vec4(compute_angles(seed + 70u, 0.0, lifetime), 0.0);
 
-    // initialize alignment direction from full velocity, w stores angle in radians
     if length(full_vel) > 0.0 {
         let init_dir = normalize(full_vel);
-        p.alignment_dir = vec4(init_dir, angle);
+        p.alignment_dir = vec4(init_dir, 0.0);
         p.ref_up = vec4(init_ref_up(init_dir), 0.0);
     } else {
-        p.alignment_dir = vec4(0.0, 1.0, 0.0, angle);
+        p.alignment_dir = vec4(0.0, 1.0, 0.0, 0.0);
         p.ref_up = vec4(0.0, 0.0, 1.0, 0.0);
     }
 
@@ -1479,16 +1500,13 @@ fn update_particle(p_in: Particle) -> Particle {
 
     p.velocity = vec4(effective_velocity, lifetime);
 
-    let angle = compute_angle(seed + 70u, age, lifetime);
+    p.angles = vec4(compute_angles(seed + 70u, age, lifetime), 0.0);
 
-    // update alignment direction and parallel-transport ref_up
     if length(effective_velocity) > 0.0 {
         let new_dir = normalize(effective_velocity);
         let old_dir = normalize(p.alignment_dir.xyz);
         p.ref_up = vec4(transport_ref_up(p.ref_up.xyz, old_dir, new_dir), 0.0);
-        p.alignment_dir = vec4(new_dir, angle);
-    } else {
-        p.alignment_dir.w = angle;
+        p.alignment_dir = vec4(new_dir, 0.0);
     }
 
     let new_position = zero_z_if(p.position.xyz + effective_velocity * dt, disable_z);

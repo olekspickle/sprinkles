@@ -7,8 +7,8 @@ use bytemuck::{Pod, Zeroable};
 use crate::{
     asset::{
         AnimatedVelocity, CurveTexture, DrawOrder, EmissionShape, EmitterCollisionMode,
-        EmitterData, ParticleSystemAsset, ParticlesColliderShape3D, SolidOrGradientColor,
-        SubEmitterMode,
+        EmitterData, ParticleFlags, ParticleSystemAsset, ParticlesColliderShape3D,
+        SolidOrGradientColor, SubEmitterMode,
     },
     runtime::{
         EmitterEntity, EmitterRuntime, ParticleBufferHandle, ParticleSystem3D,
@@ -472,7 +472,15 @@ fn build_base_uniforms(
             SolidOrGradientColor::Gradient { .. } => 1,
         },
         turbulence_enabled: if turbulence.enabled { 1 } else { 0 },
-        particle_flags: emitter.particle_flags.bits(),
+        particle_flags: {
+            let mut flags = emitter.particle_flags;
+            if let Some(curve) = &emitter.angle.angle_over_lifetime {
+                if curve.y.is_some() || curve.z.is_some() {
+                    flags |= ParticleFlags::ANGLE_PER_AXIS;
+                }
+            }
+            flags.bits()
+        },
         _pad7: 0,
 
         initial_color: match &emitter.colors.initial_color {

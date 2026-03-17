@@ -2,7 +2,6 @@
     Particle,
     ParticleEmitterUniforms,
     PARTICLE_FLAG_ACTIVE,
-    EMITTER_FLAG_ROTATE_Y,
     TRANSFORM_ALIGN_BILLBOARD,
     TRANSFORM_ALIGN_Y_TO_VELOCITY,
     TRANSFORM_ALIGN_BILLBOARD_Y_TO_VELOCITY,
@@ -75,6 +74,21 @@ fn align_y_with_ref(dir: vec3<f32>, ref_up: vec3<f32>) -> mat3x3<f32> {
     x_axis = x_axis / x_len;
     let z_axis = cross(x_axis, y_axis);
     return mat3x3<f32>(x_axis, y_axis, z_axis);
+}
+
+fn rot_x(a: f32) -> mat3x3<f32> {
+    let c = cos(a); let s = sin(a);
+    return mat3x3<f32>(vec3(1.0, 0.0, 0.0), vec3(0.0, c, s), vec3(0.0, -s, c));
+}
+
+fn rot_y(a: f32) -> mat3x3<f32> {
+    let c = cos(a); let s = sin(a);
+    return mat3x3<f32>(vec3(c, 0.0, s), vec3(0.0, 1.0, 0.0), vec3(-s, 0.0, c));
+}
+
+fn rot_z(a: f32) -> mat3x3<f32> {
+    let c = cos(a); let s = sin(a);
+    return mat3x3<f32>(vec3(c, s, 0.0), vec3(-s, c, 0.0), vec3(0.0, 0.0, 1.0));
 }
 
 @vertex
@@ -242,39 +256,19 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         }
     }
 
-    // angle rotation from alignment_dir.w (radians)
-    let angle = particle.alignment_dir.w;
-    if abs(angle) > 0.0001 {
-        let cos_a = cos(angle);
-        let sin_a = sin(angle);
-        if (emitter_uniforms.particle_flags & EMITTER_FLAG_ROTATE_Y) != 0u {
-            let angle_matrix = mat3x3<f32>(
-                vec3(cos_a, 0.0, sin_a),
-                vec3(0.0, 1.0, 0.0),
-                vec3(-sin_a, 0.0, cos_a),
-            );
-            rotated_position = angle_matrix * rotated_position;
+    let angles = particle.angles.xyz;
+    var angle_rot = mat3x3<f32>(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0));
+    if abs(angles.x) > 0.0001 { angle_rot = rot_x(angles.x) * angle_rot; }
+    if abs(angles.y) > 0.0001 { angle_rot = rot_y(angles.y) * angle_rot; }
+    if abs(angles.z) > 0.0001 { angle_rot = rot_z(angles.z) * angle_rot; }
+
+    rotated_position = angle_rot * rotated_position;
 #ifdef VERTEX_NORMALS
-            rotated_normal = angle_matrix * rotated_normal;
+    rotated_normal = angle_rot * rotated_normal;
 #endif
 #ifdef VERTEX_TANGENTS
-            rotated_tangent = angle_matrix * rotated_tangent;
+    rotated_tangent = angle_rot * rotated_tangent;
 #endif
-        } else {
-            let angle_matrix = mat3x3<f32>(
-                vec3(cos_a, sin_a, 0.0),
-                vec3(-sin_a, cos_a, 0.0),
-                vec3(0.0, 0.0, 1.0),
-            );
-            rotated_position = angle_matrix * rotated_position;
-#ifdef VERTEX_NORMALS
-            rotated_normal = angle_matrix * rotated_normal;
-#endif
-#ifdef VERTEX_TANGENTS
-            rotated_tangent = angle_matrix * rotated_tangent;
-#endif
-        }
-    }
 
     let emitter_scale = vec3(
         length(world_from_local[0].xyz),

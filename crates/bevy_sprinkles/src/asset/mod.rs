@@ -79,6 +79,8 @@ bitflags! {
         const ROTATE_Y = 1 << 1;
         /// If set, particles will not move on the Z axis, confining them to a 2D plane.
         const DISABLE_Z = 1 << 2;
+        /// If set, angle_over_lifetime uses per-axis (X/Y/Z) rotation instead of single-axis.
+        const ANGLE_PER_AXIS = 1 << 3;
 
         // TODO: requires implementing damping
     }
