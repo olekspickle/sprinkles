@@ -50,7 +50,7 @@ fn get_particle_asset<'a>(
     assets: &'a Assets<ParticlesAsset>,
 ) -> Option<&'a ParticlesAsset> {
     let particle_system = particle_systems.get(parent_system).ok()?;
-    assets.get(&particle_system.handle)
+    assets.get(particle_system)
 }
 
 fn get_emitter_data<'a>(
@@ -88,7 +88,7 @@ pub fn update_particle_time(
             continue;
         };
 
-        let Some(asset) = assets.get(&particle_system.handle) else {
+        let Some(asset) = assets.get(particle_system) else {
             continue;
         };
 
@@ -252,7 +252,7 @@ pub fn setup_particle_systems(
     mut materials: ResMut<Assets<ParticleMaterial>>,
 ) {
     for (system_entity, particle_system, is_editor) in query.iter() {
-        let Some(asset) = assets.get(&particle_system.handle) else {
+        let Some(asset) = assets.get(particle_system) else {
             continue;
         };
 

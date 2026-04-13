@@ -62,7 +62,7 @@ pub fn seekbar(asset_server: &AssetServer) -> impl Bundle {
                 SeekbarElapsed,
                 Text::new("0.00"),
                 TextFont {
-                    font: font.clone().into(),
+                    font: font.clone(),
                     font_size: LABEL_SIZE,
                     font_features: tabular_figures.clone(),
                     weight: FontWeight::MEDIUM,
@@ -117,7 +117,7 @@ pub fn seekbar(asset_server: &AssetServer) -> impl Bundle {
                 SeekbarDuration,
                 Text::new("0.00s"),
                 TextFont {
-                    font: font.into(),
+                    font,
                     font_size: LABEL_SIZE,
                     font_features: tabular_figures,
                     weight: FontWeight::MEDIUM,
@@ -164,7 +164,7 @@ fn update_seekbar(
         return;
     };
 
-    let Some(asset) = assets.get(&particle_system.handle) else {
+    let Some(asset) = assets.get(particle_system) else {
         return;
     };
 
@@ -279,7 +279,7 @@ fn on_seekbar_drag(
         return;
     };
 
-    let Some(asset) = assets.get(&particle_system.handle) else {
+    let Some(asset) = assets.get(particle_system) else {
         return;
     };
 

@@ -255,9 +255,7 @@ pub fn spawn_preview_particle_system(
     }
 
     commands.spawn((
-        Particles3d {
-            handle: handle.clone(),
-        },
+        Particles3d(handle.clone()),
         asset.initial_transform.to_transform(),
         Visibility::default(),
         EditorMode,
@@ -277,7 +275,7 @@ pub fn despawn_preview_on_project_change(
 
     for (entity, particle_system) in existing.iter() {
         let should_despawn = match &editor_state.current_project {
-            Some(handle) => particle_system.handle != *handle,
+            Some(handle) => **particle_system != *handle,
             None => true,
         };
 
@@ -371,7 +369,7 @@ pub fn handle_playback_reset_event(
     mut emitter_query: Query<(&EmitterEntity, &mut EmitterRuntime)>,
 ) {
     for (system_entity, particle_system, mut system_runtime) in system_query.iter_mut() {
-        let Some(asset) = assets.get(&particle_system.handle) else {
+        let Some(asset) = assets.get(particle_system) else {
             continue;
         };
 
@@ -398,7 +396,7 @@ pub fn handle_playback_play_event(
     mut emitter_query: Query<(&EmitterEntity, &mut EmitterRuntime)>,
 ) {
     for (system_entity, particle_system, mut system_runtime) in system_query.iter_mut() {
-        let Some(asset) = assets.get(&particle_system.handle) else {
+        let Some(asset) = assets.get(particle_system) else {
             continue;
         };
 
@@ -510,7 +508,7 @@ pub fn sync_playback_state(
     let is_seeking = drag_state.iter().any(|s| s.dragging);
 
     for (system_entity, particle_system, mut system_runtime) in system_query.iter_mut() {
-        let Some(asset) = assets.get(&particle_system.handle) else {
+        let Some(asset) = assets.get(particle_system) else {
             continue;
         };
 

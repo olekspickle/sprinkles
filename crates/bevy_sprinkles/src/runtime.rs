@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use bevy::asset::AsAssetId;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Buffer, ShaderType};
@@ -18,21 +19,54 @@ pub(crate) struct TrailHistoryEntry {
 
 /// Component that spawns a 2D particle system from a [`ParticlesAsset`].
 ///
+/// Holds a handle to the particle system asset that defines this effect.
+///
 /// # TODO
 ///
 /// 2D particle systems are not yet implemented. This component exists as a
 /// placeholder; spawning it will have no effect. Use [`Particles3d`] instead.
-#[derive(Component)]
-pub struct Particles2d {
-    /// Handle to the particle system asset that defines this effect.
-    pub handle: Handle<ParticlesAsset>,
+#[derive(Component, Deref, DerefMut)]
+pub struct Particles2d(pub Handle<ParticlesAsset>);
+
+impl From<Particles2d> for AssetId<ParticlesAsset> {
+    fn from(particles: Particles2d) -> Self {
+        particles.id()
+    }
+}
+impl From<&Particles2d> for AssetId<ParticlesAsset> {
+    fn from(particles: &Particles2d) -> Self {
+        particles.id()
+    }
+}
+impl AsAssetId for Particles2d {
+    type Asset = ParticlesAsset;
+
+    fn as_asset_id(&self) -> AssetId<Self::Asset> {
+        self.id()
+    }
 }
 
 /// Component that spawns a 3D particle system from a [`ParticlesAsset`].
-#[derive(Component)]
-pub struct Particles3d {
-    /// Handle to the particle system asset that defines this effect.
-    pub handle: Handle<ParticlesAsset>,
+/// Holds a handle to the particle system asset that defines this effect.
+#[derive(Component, Deref, DerefMut)]
+pub struct Particles3d(pub Handle<ParticlesAsset>);
+
+impl From<Particles3d> for AssetId<ParticlesAsset> {
+    fn from(mesh: Particles3d) -> Self {
+        mesh.id()
+    }
+}
+impl From<&Particles3d> for AssetId<ParticlesAsset> {
+    fn from(mesh: &Particles3d) -> Self {
+        mesh.id()
+    }
+}
+impl AsAssetId for Particles3d {
+    type Asset = ParticlesAsset;
+
+    fn as_asset_id(&self) -> AssetId<Self::Asset> {
+        self.id()
+    }
 }
 
 /// GPU-side per-particle data, packed into `[f32; 4]` vectors for shader alignment.
@@ -417,7 +451,7 @@ pub(crate) fn check_particle_system_finished(
     }
 
     for (system_entity, particle_system, mut system_runtime) in system_query.iter_mut() {
-        let Some(asset) = assets.get(&particle_system.handle) else {
+        let Some(asset) = assets.get(particle_system) else {
             continue;
         };
 

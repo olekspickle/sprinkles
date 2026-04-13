@@ -140,7 +140,7 @@ pub fn prepare_gradient_textures(
     assets: Res<Assets<ParticlesAsset>>,
 ) {
     for system in &particle_systems {
-        let Some(asset) = assets.get(&system.handle) else {
+        let Some(asset) = assets.get(system) else {
             continue;
         };
         for emitter in &asset.emitters {
@@ -229,7 +229,7 @@ pub fn prepare_curve_textures(
     assets: Res<Assets<ParticlesAsset>>,
 ) {
     for system in &particle_systems {
-        let Some(asset) = assets.get(&system.handle) else {
+        let Some(asset) = assets.get(system) else {
             continue;
         };
         for emitter in &asset.emitters {

@@ -49,9 +49,7 @@
 //! use bevy_sprinkles::prelude::*;
 //!
 //! fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-//!     commands.spawn(Particles3d {
-//!         handle: asset_server.load("my_effect.ron"),
-//!     });
+//!     commands.spawn(Particles3d(asset_server.load("my_effect.ron")));
 //! }
 //! ```
 //!
@@ -85,7 +83,7 @@
 //!         Default::default(),
 //!     ));
 //!
-//!     commands.spawn(Particles3d { handle });
+//!     commands.spawn(Particles3d(handle));
 //! }
 //! ```
 //!

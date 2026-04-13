@@ -591,7 +591,7 @@ pub fn extract_particle_systems(
         let Ok((particle_system, _)) = system_query.get(emitter_entity.parent_system) else {
             continue;
         };
-        let Some(asset) = assets.get(&particle_system.handle) else {
+        let Some(asset) = assets.get(particle_system) else {
             continue;
         };
         let Some(emitter) = asset.emitters.get(runtime.emitter_index) else {
@@ -614,7 +614,7 @@ pub fn extract_particle_systems(
             continue;
         };
 
-        let Some(asset) = assets.get(&particle_system.handle) else {
+        let Some(asset) = assets.get(particle_system) else {
             continue;
         };
 
