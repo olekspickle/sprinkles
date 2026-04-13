@@ -2,7 +2,7 @@ use bevy::color::palettes::tailwind;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 
-use bevy_sprinkles::asset::{ParticleSystemAuthors, ParticleSystemDimension};
+use bevy_sprinkles::asset::{ParticleSystemAuthors, ParticlesDimension};
 
 use crate::assets::example_thumbnail_path;
 use crate::io::examples_dir;
@@ -41,7 +41,7 @@ struct ExampleCardActive;
 struct ExampleEntry {
     name: String,
     path: String,
-    dimension: ParticleSystemDimension,
+    dimension: ParticlesDimension,
     thumbnail: String,
     authors: ParticleSystemAuthors,
 }
@@ -218,8 +218,8 @@ fn spawn_example_card(
     ));
 
     let dimension_label = match entry.dimension {
-        ParticleSystemDimension::D3 => "3D",
-        ParticleSystemDimension::D2 => "2D",
+        ParticlesDimension::D3 => "3D",
+        ParticlesDimension::D2 => "2D",
     };
 
     let name_row = commands

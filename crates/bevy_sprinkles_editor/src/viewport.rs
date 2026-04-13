@@ -236,7 +236,7 @@ pub struct EditorParticlePreview;
 pub fn spawn_preview_particle_system(
     mut commands: Commands,
     editor_state: Res<EditorState>,
-    assets: Res<Assets<ParticleSystemAsset>>,
+    assets: Res<Assets<ParticlesAsset>>,
     existing: Query<Entity, With<EditorParticlePreview>>,
 ) {
     let Some(handle) = &editor_state.current_project else {
@@ -255,7 +255,7 @@ pub fn spawn_preview_particle_system(
     }
 
     commands.spawn((
-        ParticleSystem3D {
+        Particles3d {
             handle: handle.clone(),
         },
         asset.initial_transform.to_transform(),
@@ -269,7 +269,7 @@ pub fn spawn_preview_particle_system(
 pub fn despawn_preview_on_project_change(
     mut commands: Commands,
     editor_state: Res<EditorState>,
-    existing: Query<(Entity, &ParticleSystem3D), With<EditorParticlePreview>>,
+    existing: Query<(Entity, &Particles3d), With<EditorParticlePreview>>,
 ) {
     if !editor_state.is_changed() {
         return;
@@ -333,7 +333,7 @@ pub fn respawn_preview_on_emitter_change(
     _trigger: On<PlaybackResetEvent>,
     mut commands: Commands,
     editor_state: Res<EditorState>,
-    assets: Res<Assets<ParticleSystemAsset>>,
+    assets: Res<Assets<ParticlesAsset>>,
     preview_query: Query<Entity, (With<EditorParticlePreview>, With<ParticleSystemRuntime>)>,
     emitter_query: Query<&EmitterEntity>,
 ) {
@@ -363,9 +363,9 @@ pub fn respawn_preview_on_emitter_change(
 
 pub fn handle_playback_reset_event(
     _trigger: On<PlaybackResetEvent>,
-    assets: Res<Assets<ParticleSystemAsset>>,
+    assets: Res<Assets<ParticlesAsset>>,
     mut system_query: Query<
-        (Entity, &ParticleSystem3D, &mut ParticleSystemRuntime),
+        (Entity, &Particles3d, &mut ParticleSystemRuntime),
         With<EditorParticlePreview>,
     >,
     mut emitter_query: Query<(&EmitterEntity, &mut EmitterRuntime)>,
@@ -390,9 +390,9 @@ pub fn handle_playback_reset_event(
 
 pub fn handle_playback_play_event(
     _trigger: On<PlaybackPlayEvent>,
-    assets: Res<Assets<ParticleSystemAsset>>,
+    assets: Res<Assets<ParticlesAsset>>,
     mut system_query: Query<
-        (Entity, &ParticleSystem3D, &mut ParticleSystemRuntime),
+        (Entity, &Particles3d, &mut ParticleSystemRuntime),
         With<EditorParticlePreview>,
     >,
     mut emitter_query: Query<(&EmitterEntity, &mut EmitterRuntime)>,
@@ -499,10 +499,10 @@ pub fn draw_collider_gizmos(
 }
 
 pub fn sync_playback_state(
-    assets: Res<Assets<ParticleSystemAsset>>,
+    assets: Res<Assets<ParticlesAsset>>,
     drag_state: Query<&SeekbarDragState>,
     mut system_query: Query<
-        (Entity, &ParticleSystem3D, &mut ParticleSystemRuntime),
+        (Entity, &Particles3d, &mut ParticleSystemRuntime),
         With<EditorParticlePreview>,
     >,
     mut emitter_query: Query<(&EmitterEntity, &mut EmitterRuntime)>,

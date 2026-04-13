@@ -9,9 +9,9 @@ use super::super::{
     EmitterEmission, EmitterScale as CurrentEmitterScale, EmitterTime,
     EmitterTrail as CurrentEmitterTrail, EmitterTurbulence as CurrentEmitterTurbulence,
     EmitterVelocities as CurrentEmitterVelocities, Gradient, InitialTransform, ParticleFlags,
-    ParticleSystemAsset as CurrentParticleSystemAsset,
-    ParticleSystemAuthors as CurrentParticleSystemAuthors, ParticleSystemDimension,
-    ParticlesColliderShape3D, Range, SolidOrGradientColor, SprinklesEditorData, SubEmitterConfig,
+    ParticleSystemAuthors as CurrentParticleSystemAuthors, ParticlesAsset as CurrentParticlesAsset,
+    ParticlesColliderShape3D, ParticlesDimension, Range, SolidOrGradientColor, SprinklesEditorData,
+    SubEmitterConfig,
 };
 
 #[derive(Debug, Clone, Deserialize)]
@@ -59,11 +59,11 @@ impl From<ParticleSystemAuthors> for CurrentParticleSystemAuthors {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub(super) struct ParticleSystemAsset {
+pub(super) struct ParticlesAsset {
     #[allow(dead_code)]
     sprinkles_version: String,
     name: String,
-    dimension: ParticleSystemDimension,
+    dimension: ParticlesDimension,
     #[serde(default)]
     initial_transform: InitialTransform,
     emitters: Vec<EmitterData>,
@@ -400,10 +400,10 @@ pub(super) struct ColliderData {
     position: Vec3,
 }
 
-impl From<ParticleSystemAsset> for CurrentParticleSystemAsset {
-    fn from(old: ParticleSystemAsset) -> Self {
+impl From<ParticlesAsset> for CurrentParticlesAsset {
+    fn from(old: ParticlesAsset) -> Self {
         let authors = old.authors.map(Into::into).unwrap_or_default();
-        let mut asset = CurrentParticleSystemAsset::new(
+        let mut asset = CurrentParticlesAsset::new(
             old.name,
             old.dimension,
             old.initial_transform,
