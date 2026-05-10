@@ -249,7 +249,7 @@ fn test_bevy_wrong_loader_for_wrong_data_fails() {
 }
 
 #[test]
-fn test_particle_system_loader_extension() {
+fn test_particles_loader_extension() {
     let loader = ParticlesAssetLoader;
     let extensions = loader.extensions();
     assert_eq!(extensions, &["ron"]);

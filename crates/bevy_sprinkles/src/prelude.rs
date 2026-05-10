@@ -6,7 +6,7 @@ pub use crate::asset::{
     EmitterCollisionMode, EmitterColors, EmitterData, EmitterDrawPass, EmitterEmission,
     EmitterScale, EmitterTime, EmitterTrail, EmitterTurbulence, EmitterVelocities,
     Gradient as ParticleGradient, GradientInterpolation, GradientStop, InitialTransform,
-    ParticleFlags, ParticleMesh, ParticleSystemAuthors, ParticlesAsset, ParticlesColliderShape3D,
+    ParticleFlags, ParticleMesh, ParticlesAsset, ParticlesAuthors, ParticlesColliderShape3D,
     ParticlesDimension, QuadOrientation, Range as ParticleRange, RibbonTrailShape,
     SerializableAlphaMode, SerializableFace, SolidOrGradientColor, SprinklesEditorData,
     StandardParticleMaterial, SubEmitterConfig, SubEmitterMode, TransformAlign,

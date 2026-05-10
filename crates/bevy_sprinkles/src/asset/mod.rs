@@ -1344,7 +1344,7 @@ impl SprinklesEditorData {
 
 /// Attribution information for a particle system.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Reflect)]
-pub struct ParticleSystemAuthors {
+pub struct ParticlesAuthors {
     /// The original creator this effect was inspired by.
     #[serde(default, skip_serializing_if = "is_empty_string")]
     pub inspired_by: String,
@@ -1353,7 +1353,7 @@ pub struct ParticleSystemAuthors {
     pub submitted_by: String,
 }
 
-impl ParticleSystemAuthors {
+impl ParticlesAuthors {
     /// Returns `true` if both fields are empty
     pub fn is_empty(&self) -> bool {
         self.inspired_by.is_empty() && self.submitted_by.is_empty()
@@ -1389,8 +1389,8 @@ pub struct ParticlesAsset {
     #[serde(default, skip_serializing_if = "is_false")]
     pub despawn_on_finish: bool,
     /// Attribution information.
-    #[serde(default, skip_serializing_if = "ParticleSystemAuthors::is_empty")]
-    pub authors: ParticleSystemAuthors,
+    #[serde(default, skip_serializing_if = "ParticlesAuthors::is_empty")]
+    pub authors: ParticlesAuthors,
     /// Editor-specific metadata.
     #[serde(default, skip_serializing_if = "SprinklesEditorData::is_empty")]
     pub sprinkles_editor: SprinklesEditorData,
@@ -1405,7 +1405,7 @@ impl ParticlesAsset {
         emitters: Vec<EmitterData>,
         colliders: Vec<ColliderData>,
         despawn_on_finish: bool,
-        authors: ParticleSystemAuthors,
+        authors: ParticlesAuthors,
     ) -> Self {
         Self {
             sprinkles_version: current_format_version().to_string(),

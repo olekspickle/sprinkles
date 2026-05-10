@@ -2,7 +2,7 @@ use bevy::color::palettes::tailwind;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 
-use bevy_sprinkles::asset::{ParticleSystemAuthors, ParticlesDimension};
+use bevy_sprinkles::asset::{ParticlesAuthors, ParticlesDimension};
 
 use crate::assets::example_thumbnail_path;
 use crate::io::examples_dir;
@@ -43,7 +43,7 @@ struct ExampleEntry {
     path: String,
     dimension: ParticlesDimension,
     thumbnail: String,
-    authors: ParticleSystemAuthors,
+    authors: ParticlesAuthors,
 }
 
 #[derive(Resource)]
